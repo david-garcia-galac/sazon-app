@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { X, Camera, Loader2 } from 'lucide-react'
 import { uploadFoto } from '@/lib/cloudinary-client'
 
@@ -16,10 +16,10 @@ export function Toast({ message, type = 'success' }: ToastProps) {
 
 export function useToast() {
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null)
-  const show = (message: string, type: 'success' | 'error' = 'success') => {
+  const show = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 2800)
-  }
+  }, [])
   return { toast, show }
 }
 

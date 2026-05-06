@@ -1,6 +1,6 @@
 'use client'
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, TrendingUp, TrendingDown, Package, Users } from 'lucide-react'
+import { Home, TrendingUp, TrendingDown, Package, Users, Settings } from 'lucide-react'
 
 const TABS = [
   { href: '/dashboard',    label: 'Inicio',    Icon: Home },
@@ -8,6 +8,7 @@ const TABS = [
   { href: '/egresos',      label: 'Egresos',   Icon: TrendingDown },
   { href: '/inventario',   label: 'Inventario',Icon: Package },
   { href: '/proveedores',  label: 'Proveed.',  Icon: Users },
+  { href: '/configuracion', label: 'Ajustes',   Icon: Settings },
 ]
 
 export default function BottomNav() {

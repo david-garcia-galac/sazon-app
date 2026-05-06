@@ -54,11 +54,12 @@ export interface Ingreso {
   tipo: 'desayuno' | 'almuerzo'
   bebida?: string
   cantidad: number
+  cantidad_bebida?: number
   monto: number
   moneda: 'BS' | 'USD'
-  tasa?: number
-  monto_usd?: number
-  forma_pago: 'efectivo' | 'pago_movil'
+  tasa?: number | null
+  monto_usd?: number | null
+  forma_pago: 'efectivo' | 'pago_movil' | 'transferencia'
   notas?: string
   created_at: string
   updated_at: string

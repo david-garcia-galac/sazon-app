@@ -3,6 +3,17 @@ import { neon } from '@neondatabase/serverless'
 const sql = neon(process.env.DATABASE_URL!)
 export default sql
 
+/** Resultado de `await sql`; array, `{ rows }` (`fullResults`), o objeto‑fila suelto (consultas de 1 fila). */
+export function neonRows<TResult extends Record<string, unknown>>(raw: unknown): TResult[] {
+  if (raw == null) return []
+  if (Array.isArray(raw)) return raw as TResult[]
+  if (typeof raw === 'object' && raw !== null && 'rows' in raw) {
+    const r = (raw as { rows: unknown }).rows
+    if (Array.isArray(r)) return r as TResult[]
+  }
+  return []
+}
+
 // ─── Schema SQL ───────────────────────────────────────────────────────────────
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS ingresos (
@@ -11,11 +22,12 @@ CREATE TABLE IF NOT EXISTS ingresos (
   tipo        TEXT NOT NULL CHECK (tipo IN ('desayuno','almuerzo')),
   bebida      TEXT,
   cantidad    INTEGER NOT NULL DEFAULT 1,
+  cantidad_bebida INTEGER NOT NULL DEFAULT 0,
   monto       NUMERIC(12,2) NOT NULL,
   moneda      TEXT NOT NULL DEFAULT 'BS',
   tasa        NUMERIC(10,2),
   monto_usd   NUMERIC(12,2),
-  forma_pago  TEXT NOT NULL CHECK (forma_pago IN ('efectivo','pago_movil')),
+  forma_pago  TEXT NOT NULL CHECK (forma_pago IN ('efectivo','pago_movil','transferencia')),
   notas       TEXT,
   created_at  TIMESTAMPTZ DEFAULT NOW(),
   updated_at  TIMESTAMPTZ DEFAULT NOW()
@@ -103,12 +115,44 @@ CREATE TABLE IF NOT EXISTS tasa_cambio (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS precios_config (
+  id               TEXT PRIMARY KEY,
+  empanada_bs      NUMERIC(12,2) NOT NULL DEFAULT 0,
+  tasa_bcv         NUMERIC(10,2),
+  precios_bebidas  TEXT NOT NULL DEFAULT '{}',
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_ingresos_fecha    ON ingresos(fecha);
 CREATE INDEX IF NOT EXISTS idx_egresos_fecha     ON egresos(fecha);
 CREATE INDEX IF NOT EXISTS idx_egresos_categoria ON egresos(categoria);
 CREATE INDEX IF NOT EXISTS idx_deudas_proveedor  ON deudas_proveedor(proveedor_id);
 CREATE INDEX IF NOT EXISTS idx_deudas_estado     ON deudas_proveedor(estado);
 `
+
+/** Precios configurables + columna cantidad_bebida en ingresos (bases antiguas). */
+export async function ensureSchemaPatches() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS precios_config (
+      id               TEXT PRIMARY KEY,
+      empanada_bs      NUMERIC(12,2) NOT NULL DEFAULT 0,
+      tasa_bcv         NUMERIC(10,2),
+      precios_bebidas  TEXT NOT NULL DEFAULT '{}',
+      updated_at       TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+  // Si la tabla existía sin PK, ON CONFLICT (id) no aplica bien.
+  try {
+    await sql`ALTER TABLE precios_config ADD CONSTRAINT precios_config_pkey PRIMARY KEY (id)`
+  } catch {
+    /* ya hay PK / tabla distinta */
+  }
+  try {
+    await sql`ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS cantidad_bebida INTEGER NOT NULL DEFAULT 0`
+  } catch {
+    // Si aún no existe `ingresos` (DB vacía) u otro error de permisos, no bloquea precios_config.
+  }
+}
 
 export async function initDB() {
   await sql`
@@ -118,6 +162,7 @@ export async function initDB() {
       tipo        TEXT NOT NULL,
       bebida      TEXT,
       cantidad    INTEGER NOT NULL DEFAULT 1,
+      cantidad_bebida INTEGER NOT NULL DEFAULT 0,
       monto       NUMERIC(12,2) NOT NULL,
       moneda      TEXT NOT NULL DEFAULT 'BS',
       tasa        NUMERIC(10,2),
@@ -217,4 +262,5 @@ export async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `
+  await ensureSchemaPatches()
 }

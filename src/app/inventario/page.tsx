@@ -10,7 +10,7 @@ interface Item { id: string; nombre: string; categoria: string; unidad: string; 
 interface Mov  { id: string; inventario_id: string; tipo: string; cantidad: number; fecha: string; notas?: string }
 
 const CATEGORIAS = [
-  { value: 'desayuno', label: '🌅 Desayuno' },
+  { value: 'desayuno', label: '🥟 Empanadas' },
   { value: 'almuerzo', label: '☀️ Almuerzo' },
   { value: 'general',  label: '📦 General' },
 ]
