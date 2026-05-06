@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Plus, Pencil, Trash2, ArrowDown, ArrowUp, RotateCcw } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
 import { Modal, Toast, useToast, ConfirmDialog, EmptyState, LoadingSpinner, InputField, SelectField } from '@/components/ui'
-import { hoy } from '@/lib/constants'
+import { hoy, parseDecimalInput } from '@/lib/constants'
 import { generateId } from '@/lib/idb'
 
 interface Item { id: string; nombre: string; categoria: string; unidad: string; stock_actual: number; stock_minimo: number; notas?: string }
@@ -48,7 +48,7 @@ export default function InventarioPage() {
     e.preventDefault()
     await fetch('/api/inventario', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ _type:'item', id: generateId(), ...iForm, stock_actual: parseFloat(iForm.stock_actual), stock_minimo: parseFloat(iForm.stock_minimo) }),
+      body: JSON.stringify({ _type:'item', id: generateId(), ...iForm, stock_actual: parseDecimalInput(iForm.stock_actual), stock_minimo: parseDecimalInput(iForm.stock_minimo) }),
     })
     show('Ítem guardado ✓'); setShowItemForm(false); load()
   }
@@ -58,7 +58,7 @@ export default function InventarioPage() {
     if (!showMovForm) return
     await fetch('/api/inventario', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ _type:'movimiento', id: generateId(), inventario_id: showMovForm, ...mForm, cantidad: parseFloat(mForm.cantidad) }),
+      body: JSON.stringify({ _type:'movimiento', id: generateId(), inventario_id: showMovForm, ...mForm, cantidad: parseDecimalInput(mForm.cantidad) }),
     })
     show('Movimiento registrado ✓'); setShowMovForm(null)
     setMForm({ tipo:'compra', cantidad:'', fecha: hoy(), notas:'' }); load()
@@ -183,8 +183,8 @@ export default function InventarioPage() {
           <SelectField label="Categoría" value={iForm.categoria} onChange={v=>setIForm(f=>({...f,categoria:v}))} options={CATEGORIAS}/>
           <InputField label="Unidad de medida" value={iForm.unidad} onChange={v=>setIForm(f=>({...f,unidad:v}))} placeholder="kg, litros, unidades..."/>
           <div className="grid grid-cols-2 gap-3">
-            <InputField label="Stock actual" value={iForm.stock_actual} onChange={v=>setIForm(f=>({...f,stock_actual:v}))} type="number" step="0.1"/>
-            <InputField label="Stock mínimo" value={iForm.stock_minimo} onChange={v=>setIForm(f=>({...f,stock_minimo:v}))} type="number" step="0.1"/>
+            <InputField label="Stock actual" value={iForm.stock_actual} onChange={v=>setIForm(f=>({...f,stock_actual:v}))} decimal placeholder="0,0"/>
+            <InputField label="Stock mínimo" value={iForm.stock_minimo} onChange={v=>setIForm(f=>({...f,stock_minimo:v}))} decimal placeholder="0,0"/>
           </div>
           <button type="submit" className="bg-green-600 text-white font-semibold rounded-xl px-5 py-3 active:scale-95 transition-transform w-full">
             + Guardar ítem
@@ -196,7 +196,7 @@ export default function InventarioPage() {
       <Modal open={!!showMovForm} onClose={() => setShowMovForm(null)} title="Registrar movimiento">
         <form onSubmit={saveMov} className="space-y-4 mt-2">
           <SelectField label="Tipo" value={mForm.tipo} onChange={v=>setMForm(f=>({...f,tipo:v}))} options={TIPOS_MOV}/>
-          <InputField label="Cantidad" value={mForm.cantidad} onChange={v=>setMForm(f=>({...f,cantidad:v}))} type="number" step="0.1" required/>
+          <InputField label="Cantidad" value={mForm.cantidad} onChange={v=>setMForm(f=>({...f,cantidad:v}))} decimal placeholder="0,0" required/>
           <InputField label="Fecha" value={mForm.fecha} onChange={v=>setMForm(f=>({...f,fecha:v}))} type="date"/>
           <InputField label="Notas" value={mForm.notas} onChange={v=>setMForm(f=>({...f,notas:v}))} placeholder="Observación..."/>
           <button type="submit" className="bg-green-600 text-white font-semibold rounded-xl px-5 py-3 active:scale-95 transition-transform w-full">

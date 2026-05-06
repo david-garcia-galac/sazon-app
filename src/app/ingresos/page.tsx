@@ -17,6 +17,7 @@ import {
   formatoFechaLista,
   hoy,
   labelBebida,
+  parseDecimalInput,
 } from '@/lib/constants'
 import { generateId } from '@/lib/idb'
 import type { Ingreso } from '@/lib/idb'
@@ -201,7 +202,22 @@ function IngresosInner() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.monto) return
+    if (!form.monto || String(form.monto).trim() === '') {
+      show('Indicá el monto del ingreso', 'error')
+      return
+    }
+    const montoVal = parseDecimalInput(form.monto)
+    if (!Number.isFinite(montoVal) || montoVal <= 0) {
+      show('Monto no válido (podés usar coma o punto para decimales)', 'error')
+      return
+    }
+    if (form.moneda === 'USD') {
+      const t = parseDecimalInput(form.tasa)
+      if (!Number.isFinite(t) || t <= 0) {
+        show('Indicá la tasa (Bs por 1 USD)', 'error')
+        return
+      }
+    }
     const id = editing?.id ?? generateId()
     const base = {
       fecha: form.fecha,
@@ -209,11 +225,11 @@ function IngresosInner() {
       bebida: form.bebida,
       cantidad: parseInt(form.cantidad, 10),
       cantidad_bebida: parseInt(form.cantidad_bebida, 10) || 0,
-      monto: parseFloat(form.monto),
+      monto: montoVal,
       moneda: form.moneda,
-      tasa: form.moneda === 'USD' ? parseFloat(form.tasa) : undefined,
+      tasa: form.moneda === 'USD' ? parseDecimalInput(form.tasa) : undefined,
       monto_usd:
-        form.moneda === 'USD' ? parseFloat(form.monto) : undefined,
+        form.moneda === 'USD' ? montoVal : undefined,
       forma_pago: form.moneda === 'USD' ? 'efectivo' : form.forma_pago,
       notas: form.notas,
     }
@@ -330,7 +346,14 @@ function IngresosInner() {
                   {' · '}
                   {formatoFechaLista(i.fecha)}
                 </p>
-                {i.notas && <p className="text-xs text-gray-400 mt-1">{i.notas}</p>}
+                {i.notas && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    {(i.moneda ?? 'BS') === 'BS' && i.forma_pago === 'pago_movil'
+                      ? 'Referencia: '
+                      : ''}
+                    {i.notas}
+                  </p>
+                )}
               </div>
               <div className="flex gap-2 ml-2">
                 <button onClick={() => openEdit(i)} className="p-2 rounded-xl bg-orange-50 active:scale-95">
@@ -418,18 +441,16 @@ function IngresosInner() {
                 label="Monto (USD, efectivo)"
                 value={form.monto}
                 onChange={(v) => setForm((f) => ({ ...f, monto: v }))}
-                type="number"
-                step="0.01"
-                placeholder="0.00"
+                decimal
+                placeholder="0,00"
                 required
               />
               <InputField
                 label="Tasa (Bs por 1 USD)"
                 value={form.tasa}
                 onChange={(v) => setForm((f) => ({ ...f, tasa: v }))}
-                type="number"
-                step="0.01"
-                placeholder="Ej. 36.50"
+                decimal
+                placeholder="Ej. 36,50"
                 required
               />
             </>
@@ -451,9 +472,8 @@ function IngresosInner() {
                 label="Monto total (Bs)"
                 value={form.monto}
                 onChange={(v) => setForm((f) => ({ ...f, monto: v }))}
-                type="number"
-                step="0.01"
-                placeholder="0.00"
+                decimal
+                placeholder="0,00"
                 required
               />
               <SelectField
@@ -465,7 +485,20 @@ function IngresosInner() {
               />
             </>
           )}
-          <InputField label="Notas (opcional)" value={form.notas} onChange={v=>setForm(f=>({...f,notas:v}))} placeholder="Observaciones..."/>
+          <InputField
+            label={
+              form.moneda === 'BS' && form.forma_pago === 'pago_movil'
+                ? 'Referencia (opcional)'
+                : 'Notas (opcional)'
+            }
+            value={form.notas}
+            onChange={v => setForm(f => ({ ...f, notas: v }))}
+            placeholder={
+              form.moneda === 'BS' && form.forma_pago === 'pago_movil'
+                ? 'Ej. últimos dígitos del pago, teléfono...'
+                : 'Observaciones...'
+            }
+          />
           <button type="submit" className="btn-primary mt-2">
             {editing ? '✓ Actualizar ingreso' : '+ Registrar ingreso'}
           </button>

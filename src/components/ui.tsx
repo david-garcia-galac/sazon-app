@@ -146,16 +146,44 @@ export function SelectField({ label, value, onChange, options, required }: Selec
 
 // ── Input Field ───────────────────────────────────────
 interface InputProps {
-  label: string; value: string | number; onChange: (v: string) => void
-  type?: string; placeholder?: string; required?: boolean; min?: string; step?: string
+  label: string
+  value: string | number
+  onChange: (v: string) => void
+  type?: string
+  placeholder?: string
+  required?: boolean
+  min?: string
+  step?: string
+  /** Texto con decimales: teclado numérico y se acepta coma o punto (evita limitaciones de `type="number"`). */
+  decimal?: boolean
 }
-export function InputField({ label, value, onChange, type = 'text', placeholder, required, min, step }: InputProps) {
+export function InputField({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  placeholder,
+  required,
+  min,
+  step,
+  decimal,
+}: InputProps) {
+  const useDecimal = decimal === true
+  const inputType = useDecimal ? 'text' : type
   return (
     <div>
       <label className="label">{label}{required && <span className="text-red-400"> *</span>}</label>
       <input
-        type={type} value={value} onChange={e => onChange(e.target.value)}
-        placeholder={placeholder} required={required} min={min} step={step}
+        type={inputType}
+        inputMode={useDecimal ? 'decimal' : undefined}
+        lang={useDecimal ? 'es' : undefined}
+        autoComplete={useDecimal ? 'off' : undefined}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        required={required}
+        min={useDecimal ? undefined : min}
+        step={useDecimal ? undefined : step}
         className="input-field"
       />
     </div>

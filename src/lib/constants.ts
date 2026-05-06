@@ -58,6 +58,31 @@ export function formatUSD(n: number): string {
   }).format(n)
 }
 
+/**
+ * Interpreta montos escritos con coma o punto decimal (`36,5`, `12.50`).
+ * Si hay ambos, el que aparece último es el separador decimal (ej. `1.234,56` o `1,234.56`).
+ */
+export function parseDecimalInput(raw: string): number {
+  let s = String(raw ?? '')
+    .trim()
+    .replace(/\s/g, '')
+  if (!s) return NaN
+  const hasComma = s.includes(',')
+  const hasDot = s.includes('.')
+  if (hasComma && hasDot) {
+    const lastComma = s.lastIndexOf(',')
+    const lastDot = s.lastIndexOf('.')
+    if (lastComma > lastDot) {
+      s = s.replace(/\./g, '').replace(',', '.')
+    } else {
+      s = s.replace(/,/g, '')
+    }
+  } else if (hasComma) {
+    s = s.replace(',', '.')
+  }
+  return parseFloat(s)
+}
+
 /** Fecha calendario local YYYY-MM-DD (alinea listados y `<input type="date">`; evita desfases con UTC). */
 export function fechaLocal(d: Date): string {
   const y = d.getFullYear()

@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Plus, Pencil, Trash2, DollarSign, ChevronDown, ChevronUp } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
 import { Modal, Toast, useToast, ConfirmDialog, EmptyState, LoadingSpinner, InputField, SelectField } from '@/components/ui'
-import { formatBs, FORMAS_PAGO_EGRESO, MONEDAS, hoy } from '@/lib/constants'
+import { formatBs, FORMAS_PAGO_EGRESO, MONEDAS, hoy, parseDecimalInput } from '@/lib/constants'
 import { generateId } from '@/lib/idb'
 
 interface Proveedor { id: string; nombre: string; categoria?: string; telefono?: string; tiene_credito: boolean; notas?: string }
@@ -49,7 +49,7 @@ export default function ProveedoresPage() {
     e.preventDefault()
     await fetch('/api/proveedores', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ _type:'deuda', id: generateId(), monto_pagado:0, estado:'pendiente', ...dForm, monto_total: parseFloat(dForm.monto_total) }),
+      body: JSON.stringify({ _type:'deuda', id: generateId(), monto_pagado:0, estado:'pendiente', ...dForm, monto_total: parseDecimalInput(dForm.monto_total) }),
     })
     show('Deuda registrada ✓'); setShowDeudaForm(false)
     setDForm({ proveedor_id:'', monto_total:'', moneda:'BS', fecha_compra: hoy(), fecha_vencimiento:'', notas:'' }); load()
@@ -60,7 +60,7 @@ export default function ProveedoresPage() {
     if (!showPagoForm) return
     await fetch('/api/proveedores', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ _type:'pago', id: generateId(), deuda_id: showPagoForm, ...pagoForm, monto: parseFloat(pagoForm.monto) }),
+      body: JSON.stringify({ _type:'pago', id: generateId(), deuda_id: showPagoForm, ...pagoForm, monto: parseDecimalInput(pagoForm.monto) }),
     })
     show('Pago registrado ✓'); setShowPagoForm(null)
     setPagoForm({ monto:'', fecha: hoy(), forma_pago:'efectivo', notas:'' }); load()
@@ -179,7 +179,7 @@ export default function ProveedoresPage() {
             options={proveedores.map(p=>({value:p.id,label:p.nombre}))} required/>
           <div className="grid grid-cols-2 gap-3">
             <SelectField label="Moneda" value={dForm.moneda} onChange={v=>setDForm(f=>({...f,moneda:v}))} options={MONEDAS}/>
-            <InputField label="Monto total" value={dForm.monto_total} onChange={v=>setDForm(f=>({...f,monto_total:v}))} type="number" step="0.01" required/>
+            <InputField label="Monto total" value={dForm.monto_total} onChange={v=>setDForm(f=>({...f,monto_total:v}))} decimal placeholder="0,00" required/>
           </div>
           <InputField label="Fecha de compra" value={dForm.fecha_compra} onChange={v=>setDForm(f=>({...f,fecha_compra:v}))} type="date"/>
           <InputField label="Fecha de vencimiento (opcional)" value={dForm.fecha_vencimiento} onChange={v=>setDForm(f=>({...f,fecha_vencimiento:v}))} type="date"/>
@@ -193,7 +193,7 @@ export default function ProveedoresPage() {
       {/* Modal: Pago */}
       <Modal open={!!showPagoForm} onClose={() => setShowPagoForm(null)} title="Registrar pago">
         <form onSubmit={savePago} className="space-y-4 mt-2">
-          <InputField label="Monto pagado" value={pagoForm.monto} onChange={v=>setPagoForm(f=>({...f,monto:v}))} type="number" step="0.01" required/>
+          <InputField label="Monto pagado" value={pagoForm.monto} onChange={v=>setPagoForm(f=>({...f,monto:v}))} decimal placeholder="0,00" required/>
           <InputField label="Fecha" value={pagoForm.fecha} onChange={v=>setPagoForm(f=>({...f,fecha:v}))} type="date"/>
           <SelectField label="Forma de pago" value={pagoForm.forma_pago} onChange={v=>setPagoForm(f=>({...f,forma_pago:v}))} options={FORMAS_PAGO_EGRESO}/>
           <button type="submit" className="bg-green-500 text-white font-semibold rounded-xl px-5 py-3 active:scale-95 transition-transform w-full">

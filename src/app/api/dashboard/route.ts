@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import sql from '@/lib/db'
+import sql, { neonOneRow } from '@/lib/db'
 
 /** Agregados de ingresos para un día (pestañas Bs / USD / conciliación en el panel). */
 async function aggIngresosDia(dia: string) {
-  const [row] = await sql`
+  const raw = await sql`
     SELECT 
       COALESCE(SUM(CASE WHEN COALESCE(moneda,'BS') = 'BS' THEN monto ELSE 0 END), 0)::float AS bs_total,
       COALESCE(SUM(CASE WHEN COALESCE(moneda,'BS') = 'BS' AND forma_pago = 'efectivo' THEN monto ELSE 0 END), 0)::float AS bs_efectivo,
@@ -18,7 +18,26 @@ async function aggIngresosDia(dia: string) {
       COUNT(*)::int AS ventas
     FROM ingresos WHERE fecha = ${dia}
   `
-  return row as Record<string, number>
+  const row = neonOneRow<Record<string, number>>(raw, [
+    'bs_total',
+    'usd_monto',
+    'ventas_bs',
+    'ventas_usd',
+    'ventas',
+  ])
+  return row ?? {
+    bs_total: 0,
+    bs_efectivo: 0,
+    bs_pago_movil: 0,
+    bs_transferencia: 0,
+    bs_solo: 0,
+    usd_monto: 0,
+    usd_equiv_bs: 0,
+    ventas_bs: 0,
+    ventas_usd: 0,
+    ingresos_equiv_bs: 0,
+    ventas: 0,
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -30,7 +49,7 @@ export async function GET(req: NextRequest) {
   if (diaResumen > hasta) diaResumen = hasta
 
   try {
-    const [inDia, egDia, deudas, detDia] = await Promise.all([
+    const [rawInDia, rawEgDia, deudas, detDia] = await Promise.all([
       sql`SELECT COALESCE(SUM(monto),0)::float AS total, COUNT(*)::int AS ventas FROM ingresos WHERE fecha = ${diaResumen}`,
       sql`SELECT COALESCE(SUM(CASE WHEN moneda='BS' THEN monto ELSE monto_bs END),0)::float AS total FROM egresos WHERE fecha = ${diaResumen}`,
       sql`SELECT d.id, p.nombre as proveedor_nombre, d.monto_total, d.monto_pagado, d.moneda, d.fecha_vencimiento
@@ -39,8 +58,11 @@ export async function GET(req: NextRequest) {
       aggIngresosDia(diaResumen),
     ])
 
-    const iDia = Number(inDia[0].total)
-    const eDia = Number(egDia[0].total)
+    const inRow = neonOneRow<{ total: number; ventas: number }>(rawInDia, ['total', 'ventas'])
+    const egRow = neonOneRow<{ total: number }>(rawEgDia, ['total'])
+
+    const iDia = Number(inRow?.total ?? 0)
+    const eDia = Number(egRow?.total ?? 0)
 
     const mkDet = (d: Record<string, number>) => ({
       bs: {
@@ -66,7 +88,12 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       diaResumen,
-      hoy: { ingresos: iDia, egresos: eDia, ventas: Number(inDia[0].ventas), saldo: iDia - eDia },
+      hoy: {
+        ingresos: iDia,
+        egresos: eDia,
+        ventas: Number(inRow?.ventas ?? 0),
+        saldo: iDia - eDia,
+      },
       deudasPendientes: deudas,
       ingresosDetalleHoy: mkDet(detDia),
     })

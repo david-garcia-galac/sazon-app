@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, Save } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
 import { Toast, useToast, LoadingSpinner, InputField } from '@/components/ui'
-import { BEBIDAS } from '@/lib/constants'
+import { BEBIDAS, parseDecimalInput } from '@/lib/constants'
 
 type PreciosPayload = {
   empanada_bs: number
@@ -60,20 +60,20 @@ export default function ConfiguracionPage() {
   }, [load])
 
   const save = async () => {
-    const emp = parseFloat(empanada)
+    const emp = parseDecimalInput(empanada)
     if (!Number.isFinite(emp) || emp < 0) {
       show('Precio de empanada no válido', 'error')
       return
     }
     const precios_bebidas: Record<string, number> = {}
     for (const b of BEBIDAS) {
-      const v = parseFloat(bebidas[b.value] ?? '0')
+      const v = parseDecimalInput(bebidas[b.value] ?? '0')
       precios_bebidas[b.value] = Number.isFinite(v) ? Math.max(0, v) : 0
     }
     const body: PreciosPayload = {
       empanada_bs: emp,
       tasa_bcv:
-        tasaBcv.trim() === '' ? null : Number(tasaBcv),
+        tasaBcv.trim() === '' ? null : parseDecimalInput(tasaBcv),
       precios_bebidas,
     }
     if (
@@ -135,19 +135,16 @@ export default function ConfiguracionPage() {
                 label="Precio por empanada (Bs)"
                 value={empanada}
                 onChange={setEmpanada}
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
+                decimal
+                placeholder="0,00"
                 required
               />
               <InputField
                 label="Tasa referencial BCV (Bs por 1 USD) — sólo ayuda memo"
                 value={tasaBcv}
                 onChange={setTasaBcv}
-                type="number"
-                step="0.01"
-                placeholder="Ej. 36.50 (opcional)"
+                decimal
+                placeholder="Ej. 36,50 (opcional)"
               />
               <p className="text-xs text-gray-500">
                 El campo BCV sirve solo como referencia en este panel para recordar la tasa con la que
@@ -165,10 +162,8 @@ export default function ConfiguracionPage() {
                       label={b.label}
                       value={bebidas[b.value] ?? '0'}
                       onChange={(v) => setBebidas((prev) => ({ ...prev, [b.value]: v }))}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
+                      decimal
+                      placeholder="0,00"
                     />
                   </div>
                 ))}

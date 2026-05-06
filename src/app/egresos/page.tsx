@@ -9,7 +9,7 @@ import {
 } from '@/components/ui'
 import {
   CATEGORIAS_EGRESO, FORMAS_PAGO_EGRESO, MONEDAS,
-  formatBs, formatUSD, hoy, labelCategoria
+  formatBs, formatUSD, hoy, labelCategoria, parseDecimalInput,
 } from '@/lib/constants'
 import { generateId, getDB, enqueueSync, getEgresosByFecha } from '@/lib/idb'
 import type { Egreso } from '@/lib/idb'
@@ -32,8 +32,8 @@ function EgresosInner() {
   })
 
   const montoBs = () => {
-    const m = parseFloat(form.monto)
-    const t = parseFloat(form.tasa)
+    const m = parseDecimalInput(form.monto)
+    const t = parseDecimalInput(form.tasa)
     if (form.moneda === 'USD' && t > 0 && m > 0) return m * t
     if (form.moneda === 'BS') return m
     return 0
@@ -156,9 +156,9 @@ function EgresosInner() {
     const payload: Egreso = {
       id: editing?.id ?? generateId(),
       fecha: form.fecha, categoria: form.categoria, proveedor: form.proveedor,
-      descripcion: form.descripcion, monto: parseFloat(form.monto),
+      descripcion: form.descripcion, monto: parseDecimalInput(form.monto),
       moneda: form.moneda as 'BS'|'USD',
-      tasa: form.tasa ? parseFloat(form.tasa) : undefined,
+      tasa: form.tasa ? parseDecimalInput(form.tasa) : undefined,
       monto_bs: bs || undefined,
       forma_pago: form.forma_pago,
       foto_url: form.foto_url || undefined,
@@ -312,15 +312,15 @@ function EgresosInner() {
 
           <div className="grid grid-cols-2 gap-3">
             <SelectField label="Moneda" value={form.moneda} onChange={v=>setForm(f=>({...f,moneda:v}))} options={MONEDAS} required/>
-            <InputField label="Monto" value={form.monto} onChange={v=>setForm(f=>({...f,monto:v}))} type="number" step="0.01" placeholder="0.00" required/>
+            <InputField label="Monto" value={form.monto} onChange={v=>setForm(f=>({...f,monto:v}))} decimal placeholder="0,00" required/>
           </div>
 
           {form.moneda === 'USD' && (
             <div>
-              <InputField label="Tasa del día (Bs/USD)" value={form.tasa} onChange={v=>setForm(f=>({...f,tasa:v}))} type="number" step="0.01" placeholder="Ej: 38.50"/>
+              <InputField label="Tasa del día (Bs/USD)" value={form.tasa} onChange={v=>setForm(f=>({...f,tasa:v}))} decimal placeholder="Ej: 38,50"/>
               {form.tasa && form.monto && (
                 <p className="text-xs text-green-600 mt-1 font-medium">
-                  ≈ {formatBs(parseFloat(form.monto) * parseFloat(form.tasa))}
+                  ≈ {formatBs(parseDecimalInput(form.monto) * parseDecimalInput(form.tasa))}
                 </p>
               )}
             </div>

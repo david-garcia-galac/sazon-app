@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import sql, { ensureSchemaPatches } from '@/lib/db'
+import sql, { ensureSchemaPatches, neonRows } from '@/lib/db'
 
 type Row = {
   fecha: string
@@ -62,7 +62,8 @@ function normalizeIngreso(
       { status: 400 }
     )
 
-  const moneda = monedaIn === 'USD' ? 'USD' : 'BS'
+  const moneda =
+    String(monedaIn ?? '').toUpperCase() === 'USD' ? 'USD' : 'BS'
 
   let monto: number
   let tasa: number | null = null
@@ -117,7 +118,7 @@ export async function GET(req: NextRequest) {
   try {
     await ensureSchemaPatches()
 
-    const rows =
+    const raw =
       desde && hasta
         ? await sql`
             SELECT *
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest) {
             ORDER BY created_at DESC
             LIMIT 100
           `
-    return NextResponse.json(rows)
+    return NextResponse.json(neonRows(raw))
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }

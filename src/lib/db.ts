@@ -3,7 +3,7 @@ import { neon } from '@neondatabase/serverless'
 const sql = neon(process.env.DATABASE_URL!)
 export default sql
 
-/** Resultado de `await sql`; array, `{ rows }` (`fullResults`), o objeto‑fila suelto (consultas de 1 fila). */
+/** Resultado de `await sql`; array o `{ rows }` (`fullResults`). */
 export function neonRows<TResult extends Record<string, unknown>>(raw: unknown): TResult[] {
   if (raw == null) return []
   if (Array.isArray(raw)) return raw as TResult[]
@@ -12,6 +12,25 @@ export function neonRows<TResult extends Record<string, unknown>>(raw: unknown):
     if (Array.isArray(r)) return r as TResult[]
   }
   return []
+}
+
+/** Una fila de agregado cuando Neon devuelve el objeto‑fila suelto (no array). */
+export function neonOneRow<TResult extends Record<string, unknown>>(
+  raw: unknown,
+  sentinelKeys: (keyof TResult & string)[]
+): TResult | null {
+  let rows = neonRows<TResult>(raw)
+  if (
+    rows.length === 0 &&
+    raw &&
+    typeof raw === 'object' &&
+    !Array.isArray(raw) &&
+    !('rows' in raw)
+  ) {
+    const o = raw as TResult
+    if (sentinelKeys.every(k => k in (raw as object))) rows = [o]
+  }
+  return rows[0] ?? null
 }
 
 // ─── Schema SQL ───────────────────────────────────────────────────────────────
@@ -130,7 +149,6 @@ CREATE INDEX IF NOT EXISTS idx_deudas_proveedor  ON deudas_proveedor(proveedor_i
 CREATE INDEX IF NOT EXISTS idx_deudas_estado     ON deudas_proveedor(estado);
 `
 
-/** Precios configurables + columna cantidad_bebida en ingresos (bases antiguas). */
 /** Tabla egresos (initDB crea todas; algunas rutas sólo ejecutaban antes ensureSchemaPatches). */
 export async function ensureEgresosTable() {
   await sql`
@@ -175,6 +193,11 @@ export async function ensureSchemaPatches() {
     await sql`ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS cantidad_bebida INTEGER NOT NULL DEFAULT 0`
   } catch {
     // Si aún no existe `ingresos` (DB vacía) u otro error de permisos, no bloquea precios_config.
+  }
+  try {
+    await sql`ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS monto_usd NUMERIC(12,2)`
+  } catch {
+    /* sin tabla ingresos u columna ya distinta */
   }
 }
 
