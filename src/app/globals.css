@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex z-40;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  .nav-item {
+    @apply flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-gray-400 transition-colors active:scale-95;
+  }
+  .nav-item.active {
+    @apply text-orange-500;
+  }
+  .section-title {
+    @apply text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3;
+  }
+  .btn-primary {
+    @apply bg-orange-500 text-white font-semibold rounded-xl px-5 py-3 active:scale-95 transition-transform flex items-center justify-center gap-2;
+  }
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  .input-field {
+    @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-500;
+  }
+  .toast-success {
+    @apply bg-green-500 text-white px-5 py-3 rounded-2xl text-sm font-medium;
+  }
+  .toast-error {
+    @apply bg-red-500 text-white px-5 py-3 rounded-2xl text-sm font-medium;
+  }
+}
+
+@layer utilities {
+  .safe-top {
+    padding-top: max(2.5rem, env(safe-area-inset-top));
+  }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.2s ease-out;
+}
