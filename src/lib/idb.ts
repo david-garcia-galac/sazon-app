@@ -220,7 +220,7 @@ export async function dbGetAll<T extends keyof SazonDB>(
   store: T
 ): Promise<SazonDB[T]['value'][]> {
   const db = await getDB()
-  const all = await db.getAll(store as string)
+  const all = await db.getAll(store as any)
   return (all as SazonDB[T]['value'][]).filter((i: any) => !i._deleted)
 }
 
@@ -229,7 +229,7 @@ export async function dbGet<T extends keyof SazonDB>(
   id: string
 ): Promise<SazonDB[T]['value'] | undefined> {
   const db = await getDB()
-  return db.get(store as string, id) as Promise<SazonDB[T]['value'] | undefined>
+  return db.get(store as any, id) as Promise<SazonDB[T]['value'] | undefined>
 }
 
 export async function dbPut<T extends keyof SazonDB>(
@@ -237,9 +237,9 @@ export async function dbPut<T extends keyof SazonDB>(
   value: SazonDB[T]['value']
 ): Promise<void> {
   const db = await getDB()
-  await db.put(store as string, value)
+  await db.put(store as any, value)
   // add to sync queue
-  await addToSyncQueue(store as string, 'create', value as Record<string, unknown>)
+  await addToSyncQueue(store as any, 'create', value as Record<string, unknown>)
 }
 
 export async function dbDelete<T extends keyof SazonDB>(
@@ -247,12 +247,12 @@ export async function dbDelete<T extends keyof SazonDB>(
   id: string
 ): Promise<void> {
   const db = await getDB()
-  const item = await db.get(store as string, id) as any
+  const item = await db.get(store as any, id) as any
   if (item) {
     item._deleted = true
     item.updated_at = new Date().toISOString()
-    await db.put(store as string, item)
-    await addToSyncQueue(store as string, 'delete', { id })
+    await db.put(store as any, item)
+    await addToSyncQueue(store as any, 'delete', { id })
   }
 }
 
