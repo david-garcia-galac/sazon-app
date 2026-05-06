@@ -131,6 +131,30 @@ CREATE INDEX IF NOT EXISTS idx_deudas_estado     ON deudas_proveedor(estado);
 `
 
 /** Precios configurables + columna cantidad_bebida en ingresos (bases antiguas). */
+/** Tabla egresos (initDB crea todas; algunas rutas sólo ejecutaban antes ensureSchemaPatches). */
+export async function ensureEgresosTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS egresos (
+      id             TEXT PRIMARY KEY,
+      fecha          DATE NOT NULL,
+      categoria      TEXT NOT NULL,
+      proveedor      TEXT,
+      descripcion    TEXT,
+      monto          NUMERIC(12,2) NOT NULL,
+      moneda         TEXT NOT NULL DEFAULT 'BS',
+      tasa           NUMERIC(10,2),
+      monto_bs       NUMERIC(12,2),
+      forma_pago     TEXT NOT NULL,
+      foto_url       TEXT,
+      foto_public_id TEXT,
+      proveedor_id   TEXT,
+      created_at     TIMESTAMPTZ DEFAULT NOW(),
+      updated_at     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_egresos_fecha ON egresos(fecha)`
+}
+
 export async function ensureSchemaPatches() {
   await sql`
     CREATE TABLE IF NOT EXISTS precios_config (

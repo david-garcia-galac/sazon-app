@@ -150,8 +150,15 @@ export function DashboardDiaResumen({
           <strong className="text-brand-brown">Ventas (Bs)</strong>{' '}
           <span className="tabular-nums font-semibold">{d.bs.ventas}</span>
         </span>
+        {(d.usd.ventas > 0 || d.usd.totalUsd > 0) && (
+          <span>
+            <strong className="text-emerald-700">USD efectivo</strong>{' '}
+            <span className="tabular-nums font-semibold">{formatUSD(d.usd.totalUsd)}</span>
+            <span className="text-gray-500"> ({d.usd.ventas} venta{d.usd.ventas === 1 ? '' : 's'})</span>
+          </span>
+        )}
         <span>
-          <strong className="text-green-700">Total Bs</strong>{' '}
+          <strong className="text-green-700">Bolívares cobrados (Bs)</strong>{' '}
           <span className="tabular-nums">{formatBs(d.bs.total)}</span>
         </span>
         <span>
@@ -188,6 +195,14 @@ export function DashboardDiaResumen({
             fill: 'fill-amber-800',
           },
           {
+            label: 'USD efectivo (equiv. Bs)',
+            short: '$→Bs',
+            raw: d.usd.equivBs,
+            display: formatBs(d.usd.equivBs),
+            tone: 'bg-emerald-500',
+            fill: 'fill-emerald-600',
+          },
+          {
             label: 'Egresos (Bs)',
             short: 'Egres.',
             raw: agg.egresos,
@@ -196,7 +211,7 @@ export function DashboardDiaResumen({
             fill: 'fill-red-400',
           },
         ]}
-        footnote={<p>Ingresos en bolívares por forma de pago y egresos del día seleccionado.</p>}
+        footnote={<p>Ingresos: bolívares por forma de pago, equivalente del efectivo USD y egresos del día.</p>}
       />
     )
   } else if (ingTab === 'usd') {

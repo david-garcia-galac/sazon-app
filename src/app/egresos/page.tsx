@@ -11,7 +11,7 @@ import {
   CATEGORIAS_EGRESO, FORMAS_PAGO_EGRESO, MONEDAS,
   formatBs, formatUSD, hoy, labelCategoria
 } from '@/lib/constants'
-import { generateId } from '@/lib/idb'
+import { generateId, getDB, enqueueSync, getEgresosByFecha } from '@/lib/idb'
 import type { Egreso } from '@/lib/idb'
 
 function EgresosInner() {
@@ -54,13 +54,58 @@ function EgresosInner() {
     return { desde: '2024-01-01', hasta: '2099-12-31' }
   }
 
+  const ordenEgresos = (list: Egreso[]) =>
+    [...list].sort(
+      (a, b) =>
+        (b.created_at || '').localeCompare(a.created_at || '') ||
+        (b.id || '').localeCompare(a.id || '')
+    )
+
   const load = useCallback(async () => {
     setLoading(true)
     const { desde, hasta } = getFechas()
+    let remoteOk = false
+    let remoteRows: Egreso[] | null = null
+
     try {
       const res = await fetch(`/api/egresos?desde=${desde}&hasta=${hasta}`)
-      if (res.ok) setEgresos(await res.json())
-    } catch {} finally { setLoading(false) }
+      if (res.ok) {
+        remoteRows = await res.json()
+        remoteOk = true
+      }
+    } catch {
+      /* sin red o servidor caído */
+    }
+
+    const db = await getDB()
+    if (remoteOk && remoteRows) {
+      const pending = (
+        await getEgresosByFecha(desde, hasta).catch(() => [] as Egreso[])
+      ).filter(e => e._synced === 0)
+
+      for (const r of remoteRows as Egreso[]) {
+        const existing = await db.get('egresos', r.id)
+        if (existing?._synced === 0) continue
+        await db.put('egresos', { ...r, _synced: 1 })
+      }
+
+      const byId = new Map<string, Egreso>()
+      for (const r of remoteRows as Egreso[]) byId.set(r.id, r)
+      for (const p of pending) byId.set(p.id, p)
+      setEgresos(
+        ordenEgresos(Array.from(byId.values()).filter(r => !(r._deleted ?? false)))
+      )
+    } else {
+      try {
+        const local = (
+          await getEgresosByFecha(desde, hasta).catch(() => [] as Egreso[])
+        ).filter(e => !e._deleted)
+        setEgresos(ordenEgresos(local))
+      } catch {
+        setEgresos([])
+      }
+    }
+    setLoading(false)
   }, [filtro])
 
   useEffect(() => { load() }, [load])
@@ -85,6 +130,25 @@ function EgresosInner() {
     setForm({ fecha: hoy(), categoria: '', proveedor: '', descripcion: '', monto: '', moneda: 'BS', tasa: '', forma_pago: 'efectivo', notas: '', foto_url: '', foto_public_id: '' })
   }
 
+  const payloadSyncRecord = (e: Egreso): Record<string, unknown> => {
+    const o: Record<string, unknown> = {
+      id: e.id,
+      fecha: e.fecha,
+      categoria: e.categoria,
+      proveedor: e.proveedor ?? '',
+      descripcion: e.descripcion ?? '',
+      monto: e.monto,
+      moneda: e.moneda,
+      forma_pago: e.forma_pago,
+    }
+    if (e.tasa != null) o.tasa = e.tasa
+    if (e.monto_bs != null) o.monto_bs = e.monto_bs
+    if (e.foto_url) o.foto_url = e.foto_url
+    if (e.foto_public_id) o.foto_public_id = e.foto_public_id
+    if (e.proveedor_id) o.proveedor_id = e.proveedor_id
+    return o
+  }
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.monto || !form.categoria) return
@@ -102,17 +166,72 @@ function EgresosInner() {
       created_at: editing?.created_at ?? new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
-    await fetch('/api/egresos', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload),
-    })
-    show(editing ? 'Egreso actualizado ✓' : 'Egreso registrado ✓')
-    closeForm(); load()
+
+    try {
+      const res = await fetch('/api/egresos', {
+        method: editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const j = await res.json().catch(() => ({} as { error?: string }))
+      if (res.ok) {
+        const db = await getDB()
+        await db.put('egresos', { ...payload, _synced: 1 })
+        show(editing ? 'Egreso actualizado ✓' : 'Egreso registrado ✓')
+        closeForm()
+        load()
+        return
+      }
+      if (res.status === 400) {
+        show(j.error ?? 'No se pudo guardar', 'error')
+        return
+      }
+      /* servidor u otro error: intentamos cola local como respaldo */
+    } catch {
+      /* fetch falló ( típico sin red ) */
+    }
+
+    const db = await getDB()
+    await db.put('egresos', { ...payload, _synced: 0 })
+    await enqueueSync('egresos', editing ? 'update' : 'create', payloadSyncRecord(payload))
+    show(
+      editing
+        ? 'Guardado en el dispositivo; tocá “sincronizar” en el inicio cuando haya Internet ✓'
+        : 'Guardado aquí ✓ Cuando vuelva la red, sincroniza desde el inicio.',
+      'success'
+    )
+    closeForm()
+    load()
   }
 
   const del = async (id: string) => {
-    await fetch('/api/egresos', { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id }) })
-    show('Egreso eliminado', 'error'); setConfirmId(null); load()
+    try {
+      const res = await fetch('/api/egresos', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      if (res.ok) {
+        await getDB().then(db => db.delete('egresos', id))
+        show('Egreso eliminado')
+        setConfirmId(null)
+        load()
+        return
+      }
+    } catch {}
+
+    await getDB().then(async db => {
+      const item = await db.get('egresos', id)
+      if (item) {
+        ;(item as Egreso)._deleted = true
+        ;(item as Egreso).updated_at = new Date().toISOString()
+        await db.put('egresos', item)
+      }
+      await enqueueSync('egresos', 'delete', { id })
+    })
+    show('Eliminación local sincronizada luego cuando haya red', 'error')
+    setConfirmId(null)
+    load()
   }
 
   const total = egresos.reduce((s, e) => s + Number(e.monto_bs ?? e.monto), 0)

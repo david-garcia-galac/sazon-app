@@ -273,6 +273,18 @@ async function addToSyncQueue(
   await db.put('sync_queue', item)
 }
 
+/** Cola hacia Postgres (solo columnas de tabla; sin campos IndexedDB locales). */
+export async function enqueueSync(
+  tabla: string,
+  accion: 'create' | 'update' | 'delete',
+  payload: Record<string, unknown>
+): Promise<void> {
+  const copy = { ...payload }
+  delete copy._synced
+  delete copy._deleted
+  await addToSyncQueue(tabla, accion, copy)
+}
+
 export async function getSyncQueue(): Promise<SyncItem[]> {
   const db = await getDB()
   return db.getAllFromIndex('sync_queue', 'by-ts')
