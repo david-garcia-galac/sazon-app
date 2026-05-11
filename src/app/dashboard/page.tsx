@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, AlertCircle, LogOut, Wifi, WifiOff, Plus, Settings } from 'lucide-react'
+import { RefreshCw, LogOut, Wifi, WifiOff, Plus, Settings } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
 import { DashboardDiaResumen, type PeriodoDetalleIngresos } from '@/components/DashboardDiaResumen'
 import { LoadingSpinner, Toast, useToast } from '@/components/ui'
@@ -135,26 +135,7 @@ export default function DashboardPage() {
 
       <div className="px-4 pt-3 space-y-4">
 
-        {data && data.deudasPendientes.length > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3">
-            <AlertCircle size={20} className="text-amber-500 flex-shrink-0 mt-0.5"/>
-            <div>
-              <p className="font-semibold text-amber-800 text-sm">
-                {data.deudasPendientes.length} deuda(s) pendiente(s)
-              </p>
-              {data.deudasPendientes.slice(0,2).map(d => (
-                <p key={d.id} className="text-xs text-amber-600 mt-0.5">
-                  • {d.proveedor_nombre}: {formatBs(d.monto_total - d.monto_pagado)} pendiente
-                </p>
-              ))}
-              <button onClick={() => router.push('/proveedores')} className="text-xs text-amber-700 font-medium mt-1 underline">
-                Ver todas →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {loading ? <LoadingSpinner/> : (
+{loading ? <LoadingSpinner/> : (
           <>
             <div className="sticky top-0 z-10 -mx-1 px-1 pt-2 pb-3 bg-gradient-to-b from-white from-80% to-transparent">
               <div className="flex rounded-2xl bg-orange-500/90 p-1 gap-1 shadow-inner">

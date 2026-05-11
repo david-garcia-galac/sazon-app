@@ -45,6 +45,7 @@ function fmtDiaTitulo(iso: string): string {
 }
 
 function Bars({ items, footnote }: { items: BarItem[]; footnote: ReactNode }) {
+  const allZero = items.every(i => i.raw === 0)
   const max = Math.max(...items.map(i => i.raw), 1e-6)
   const W = 320
   const H = 124
@@ -57,6 +58,16 @@ function Bars({ items, footnote }: { items: BarItem[]; footnote: ReactNode }) {
   const n = items.length
   const gap = 6
   const barW = (innerW - gap * (n - 1)) / n
+
+  if (allZero) {
+    return (
+      <div className="rounded-2xl border border-orange-100 bg-gradient-to-b from-white to-orange-50/40 p-6 shadow-sm flex flex-col items-center gap-2 text-center">
+        <p className="text-3xl">📭</p>
+        <p className="text-sm font-semibold text-gray-500">Sin registros para esta fecha</p>
+        <p className="text-xs text-gray-400">Registrá un ingreso o seleccioná otro día</p>
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-2xl border border-orange-100 bg-gradient-to-b from-white to-orange-50/40 p-3 shadow-sm">
