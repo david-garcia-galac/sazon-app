@@ -144,7 +144,7 @@ function EgresosInner() {
   const openEdit = (e: Egreso) => {
     setEditing(e)
     setForm({
-      fecha: e.fecha, categoria: e.categoria, proveedor: e.proveedor ?? '',
+      fecha: (e.fecha ?? '').slice(0, 10), categoria: e.categoria, proveedor: e.proveedor ?? '',
       proveedor_id: e.proveedor_id ?? '',
       descripcion: e.descripcion ?? '', monto: String(e.monto),
       moneda: e.moneda, tasa: e.tasa ? String(e.tasa) : '',

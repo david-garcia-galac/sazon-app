@@ -98,22 +98,43 @@ export function StatCard({ label, value, sub, color = 'orange', icon }: StatCard
 }
 
 // ── Image compression ──────────────────────────────────────
-function compressImage(file: File, maxW = 1600, quality = 0.82): Promise<File> {
+const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024 // 3.5 MB — por debajo del límite de Vercel
+
+function compressToBlob(img: HTMLImageElement, maxW: number, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    const scale = Math.min(1, maxW / Math.max(img.width, img.height, 1))
+    const w = Math.round(img.width * scale)
+    const h = Math.round(img.height * scale)
+    const canvas = document.createElement('canvas')
+    canvas.width = w; canvas.height = h
+    canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+    canvas.toBlob((blob) => resolve(blob), 'image/jpeg', quality)
+  })
+}
+
+async function compressImage(file: File): Promise<File> {
   return new Promise((resolve) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
-    img.onload = () => {
+    img.onload = async () => {
       URL.revokeObjectURL(url)
-      const scale = Math.min(1, maxW / Math.max(img.width, img.height))
-      const w = Math.round(img.width * scale)
-      const h = Math.round(img.height * scale)
-      const canvas = document.createElement('canvas')
-      canvas.width = w; canvas.height = h
-      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
-      canvas.toBlob(
-        (blob) => resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file),
-        'image/jpeg', quality,
-      )
+      // Intentos en orden descendente de calidad hasta que quepa en MAX_UPLOAD_BYTES
+      const attempts: [number, number][] = [
+        [1200, 0.75],
+        [900,  0.65],
+        [700,  0.55],
+        [500,  0.45],
+      ]
+      for (const [maxW, quality] of attempts) {
+        const blob = await compressToBlob(img, maxW, quality)
+        if (blob && blob.size <= MAX_UPLOAD_BYTES) {
+          resolve(new File([blob], 'foto.jpg', { type: 'image/jpeg' }))
+          return
+        }
+      }
+      // Último recurso: calidad mínima
+      const blob = await compressToBlob(img, 400, 0.35)
+      resolve(blob ? new File([blob], 'foto.jpg', { type: 'image/jpeg' }) : file)
     }
     img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
     img.src = url
@@ -140,8 +161,9 @@ export function PhotoPicker({ onUpload, existingUrl }: PhotoPickerProps) {
       setPhase('uploading')
       const { url, public_id } = await uploadFoto(compressed)
       onUpload(url, public_id)
-    } catch {
-      alert('Error al subir la foto. Intenta de nuevo.')
+    } catch (err: any) {
+      setPreview('')
+      alert(err?.message ?? 'Error al subir la foto. Intenta de nuevo.')
     } finally {
       setPhase('idle')
     }

@@ -28,8 +28,11 @@ function normalize(body: Record<string, unknown>): NextResponse | { id: string; 
   const id = body.id != null ? String(body.id) : ''
   if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
-  const fecha = str(body.fecha, 40)
-  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha))
+  const fechaRaw = str(body.fecha, 40)
+  // Acepta "YYYY-MM-DD" o ISO timestamp completo "YYYY-MM-DDTHH:..."
+  const fechaMatch = fechaRaw?.match(/^(\d{4}-\d{2}-\d{2})/)
+  const fecha = fechaMatch?.[1] ?? null
+  if (!fecha)
     return NextResponse.json({ error: 'Fecha no válida' }, { status: 400 })
 
   const categoria = str(body.categoria, 128)

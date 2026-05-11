@@ -21,7 +21,7 @@ function uploadBuffer(buffer: Buffer): Promise<UploadApiResponse> {
   })
 }
 
-const MAX_BYTES = 8 * 1024 * 1024 // 8 MB
+const MAX_BYTES = 4 * 1024 * 1024 // 4 MB (Vercel Hobby limit is 4.5 MB)
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const formData = await req.formData()
@@ -30,17 +30,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
-      { error: `La imagen supera el límite de 8 MB (recibida: ${(file.size / 1024 / 1024).toFixed(1)} MB)` },
+      { error: `Imagen demasiado grande: ${(file.size / 1024 / 1024).toFixed(1)} MB. Máximo 4 MB.` },
       { status: 413 }
     )
+  }
+
+  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    console.error('[upload] Faltan variables de entorno de Cloudinary')
+    return NextResponse.json({ error: 'Configuración de Cloudinary incompleta' }, { status: 500 })
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
   try {
     const result = await uploadBuffer(buffer)
     return NextResponse.json({ url: result.secure_url, public_id: result.public_id })
-  } catch (err) {
-    console.error('[upload] Cloudinary error:', err)
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+  } catch (err: any) {
+    console.error('[upload] Cloudinary error:', err?.message ?? err)
+    const msg = typeof err?.message === 'string' ? err.message : 'Error al subir la imagen'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
