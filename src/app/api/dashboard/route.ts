@@ -50,15 +50,59 @@ export async function GET(req: NextRequest) {
   let diaResumen = searchParams.get('dia') ?? hasta
   if (diaResumen > hasta) diaResumen = hasta
 
+  // Garantizar que las tablas existan antes de cualquier consulta
   try {
-    const [rawInDia, rawEgDia, deudas, detDia] = await Promise.all([
+    await sql`CREATE TABLE IF NOT EXISTS ingresos (
+      id TEXT PRIMARY KEY, fecha DATE NOT NULL, tipo TEXT NOT NULL,
+      bebida TEXT, cantidad INTEGER NOT NULL DEFAULT 1,
+      cantidad_bebida INTEGER NOT NULL DEFAULT 0,
+      monto NUMERIC(12,2) NOT NULL, moneda TEXT NOT NULL DEFAULT 'BS',
+      tasa NUMERIC(10,2), monto_usd NUMERIC(12,2),
+      forma_pago TEXT NOT NULL, notas TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`
+    await sql`CREATE TABLE IF NOT EXISTS egresos (
+      id TEXT PRIMARY KEY, fecha DATE NOT NULL, categoria TEXT NOT NULL,
+      proveedor TEXT, descripcion TEXT, monto NUMERIC(12,2) NOT NULL,
+      moneda TEXT NOT NULL DEFAULT 'BS', tasa NUMERIC(10,2), monto_bs NUMERIC(12,2),
+      forma_pago TEXT NOT NULL, foto_url TEXT, foto_public_id TEXT, proveedor_id TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`
+    await sql`CREATE TABLE IF NOT EXISTS proveedores (
+      id TEXT PRIMARY KEY, nombre TEXT NOT NULL, categoria TEXT,
+      telefono TEXT, tiene_credito BOOLEAN DEFAULT FALSE, notas TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`
+    await sql`CREATE TABLE IF NOT EXISTS deudas_proveedor (
+      id TEXT PRIMARY KEY, proveedor_id TEXT NOT NULL, egreso_id TEXT,
+      monto_total NUMERIC(12,2) NOT NULL, monto_pagado NUMERIC(12,2) DEFAULT 0,
+      moneda TEXT DEFAULT 'BS', fecha_compra DATE NOT NULL,
+      fecha_vencimiento DATE, estado TEXT DEFAULT 'pendiente', notas TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`
+  } catch {
+    // Las tablas ya existen — ignorar
+  }
+
+  try {
+    const [rawInDia, rawEgDia, detDia] = await Promise.all([
       sql`SELECT COALESCE(SUM(monto),0)::float AS total, COUNT(*)::int AS ventas FROM ingresos WHERE fecha = ${diaResumen}`,
       sql`SELECT COALESCE(SUM(CASE WHEN moneda='BS' THEN monto ELSE monto_bs END),0)::float AS total FROM egresos WHERE fecha = ${diaResumen}`,
-      sql`SELECT d.id, p.nombre as proveedor_nombre, d.monto_total, d.monto_pagado, d.moneda, d.fecha_vencimiento
-          FROM deudas_proveedor d JOIN proveedores p ON p.id = d.proveedor_id
-          WHERE d.estado IN ('pendiente','parcial') ORDER BY d.fecha_vencimiento ASC NULLS LAST LIMIT 5`,
       aggIngresosDia(diaResumen),
     ])
+
+    // Deudas en consulta separada para que un error no rompa todo el dashboard
+    let deudas: unknown[] = []
+    try {
+      deudas = await sql`
+        SELECT d.id, p.nombre as proveedor_nombre, d.monto_total, d.monto_pagado, d.moneda, d.fecha_vencimiento
+        FROM deudas_proveedor d JOIN proveedores p ON p.id = d.proveedor_id
+        WHERE d.estado IN ('pendiente','parcial')
+        ORDER BY d.fecha_vencimiento ASC NULLS LAST LIMIT 5
+      `
+    } catch {
+      // Tablas de proveedores/deudas aún no creadas
+    }
 
     const inRow = neonOneRow<{ total: number; ventas: number }>(rawInDia, ['total', 'ventas'])
     const egRow = neonOneRow<{ total: number }>(rawEgDia, ['total'])
