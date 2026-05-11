@@ -78,6 +78,30 @@ export function StatCard({ label, value, sub, color = 'orange', icon }: StatCard
   )
 }
 
+function compressImage(file: File, maxW = 1600, quality = 0.82): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxW / Math.max(img.width, img.height))
+      const w = Math.round(img.width * scale)
+      const h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+      canvas.toBlob(
+        (blob) => resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file),
+        'image/jpeg',
+        quality,
+      )
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
+    img.src = url
+  })
+}
+
 // ── Photo Picker ──────────────────────────────────────
 interface PhotoPickerProps {
   onUpload: (url: string, publicId: string) => void
@@ -93,10 +117,11 @@ export function PhotoPicker({ onUpload, existingUrl }: PhotoPickerProps) {
     setPreview(URL.createObjectURL(file))
     setLoading(true)
     try {
-      const { url, public_id } = await uploadFoto(file)
+      const compressed = await compressImage(file)
+      const { url, public_id } = await uploadFoto(compressed)
       onUpload(url, public_id)
     } catch {
-      alert('Error al subir la foto')
+      alert('Error al subir la foto. Intenta con una imagen más pequeña.')
     } finally {
       setLoading(false)
     }

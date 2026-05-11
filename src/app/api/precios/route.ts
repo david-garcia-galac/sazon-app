@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import sql, { ensureSchemaPatches, neonRows } from '@/lib/db'
 import { blankPreciosBebidas } from '@/lib/precios-config'
 
+export const dynamic = 'force-dynamic'
+
 const CFG_ID = 'default'
 
 /** Devuelve un objeto desde TEXT, JSONB o ya parseado por el driver Neon. */

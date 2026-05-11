@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sql from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 const VALID_TABLES = new Set([
   'ingresos', 'egresos', 'proveedores',
   'deudas_proveedor', 'pagos_proveedor',

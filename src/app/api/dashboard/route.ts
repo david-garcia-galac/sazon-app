@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sql, { neonOneRow } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 /** Agregados de ingresos para un día (pestañas Bs / USD / conciliación en el panel). */
 async function aggIngresosDia(dia: string) {
   const raw = await sql`

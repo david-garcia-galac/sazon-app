@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { initDB } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 /** Crea todas las tablas y aplica parches (precios_config, cantidad_bebida). Llamalo una vez si falla /api/precios. */
 export async function GET() {
   try {

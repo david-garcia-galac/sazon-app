@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sql, { ensureSchemaPatches, neonRows } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 type Row = {
   fecha: string
   tipo: string

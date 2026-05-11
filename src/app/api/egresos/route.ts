@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sql, { ensureEgresosTable } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 type EgresoRow = {
   fecha: string
   categoria: string

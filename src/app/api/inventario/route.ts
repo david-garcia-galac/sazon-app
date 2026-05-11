@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sql from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const items = await sql`SELECT * FROM inventario ORDER BY nombre ASC`
