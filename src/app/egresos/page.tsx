@@ -12,7 +12,7 @@ import {
   formatBs, formatUSD, hoy, labelCategoria, parseDecimalInput,
 } from '@/lib/constants'
 import { generateId, getDB, enqueueSync, getEgresosByFecha } from '@/lib/idb'
-import type { Egreso } from '@/lib/idb'
+import type { Egreso, Proveedor } from '@/lib/idb'
 
 function EgresosInner() {
   const [egresos, setEgresos]   = useState<Egreso[]>([])
@@ -21,12 +21,15 @@ function EgresosInner() {
   const [editing, setEditing]   = useState<Egreso | null>(null)
   const [confirmId, setConfirmId] = useState<string|null>(null)
   const [filtro, setFiltro]     = useState<'hoy'|'semana'|'mes'|'todo'>('hoy')
+  const [proveedores, setProveedores] = useState<Proveedor[]>([])
+  const [addingProv, setAddingProv]   = useState(false)
+  const [newProvNombre, setNewProvNombre] = useState('')
   const { toast, show } = useToast()
   const searchParams = useSearchParams()
   const router = useRouter()
 
   const [form, setForm] = useState({
-    fecha: hoy(), categoria: '', proveedor: '', descripcion: '',
+    fecha: hoy(), categoria: '', proveedor: '', proveedor_id: '', descripcion: '',
     monto: '', moneda: 'BS', tasa: '', forma_pago: 'efectivo', notas: '',
     foto_url: '', foto_public_id: '',
   })
@@ -113,10 +116,35 @@ function EgresosInner() {
     if (searchParams.get('nuevo') === '1') { setShowForm(true); router.replace('/egresos') }
   }, [searchParams, router])
 
+  useEffect(() => {
+    fetch('/api/proveedores')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.proveedores) setProveedores(d.proveedores) })
+      .catch(() => {})
+  }, [])
+
+  const addProveedor = async () => {
+    const nombre = newProvNombre.trim()
+    if (!nombre) return
+    const id = generateId()
+    try {
+      await fetch('/api/proveedores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ _type: 'proveedor', id, nombre, tiene_credito: false }),
+      })
+    } catch {}
+    setProveedores(prev => [...prev, { id, nombre, tiene_credito: false, created_at: new Date().toISOString() } as Proveedor].sort((a, b) => a.nombre.localeCompare(b.nombre)))
+    setForm(f => ({ ...f, proveedor_id: id, proveedor: nombre }))
+    setAddingProv(false)
+    setNewProvNombre('')
+  }
+
   const openEdit = (e: Egreso) => {
     setEditing(e)
     setForm({
       fecha: e.fecha, categoria: e.categoria, proveedor: e.proveedor ?? '',
+      proveedor_id: e.proveedor_id ?? '',
       descripcion: e.descripcion ?? '', monto: String(e.monto),
       moneda: e.moneda, tasa: e.tasa ? String(e.tasa) : '',
       forma_pago: e.forma_pago, notas: '', foto_url: e.foto_url ?? '',
@@ -127,7 +155,8 @@ function EgresosInner() {
 
   const closeForm = () => {
     setShowForm(false); setEditing(null)
-    setForm({ fecha: hoy(), categoria: '', proveedor: '', descripcion: '', monto: '', moneda: 'BS', tasa: '', forma_pago: 'efectivo', notas: '', foto_url: '', foto_public_id: '' })
+    setAddingProv(false); setNewProvNombre('')
+    setForm({ fecha: hoy(), categoria: '', proveedor: '', proveedor_id: '', descripcion: '', monto: '', moneda: 'BS', tasa: '', forma_pago: 'efectivo', notas: '', foto_url: '', foto_public_id: '' })
   }
 
   const payloadSyncRecord = (e: Egreso): Record<string, unknown> => {
@@ -156,6 +185,7 @@ function EgresosInner() {
     const payload: Egreso = {
       id: editing?.id ?? generateId(),
       fecha: form.fecha, categoria: form.categoria, proveedor: form.proveedor,
+      proveedor_id: form.proveedor_id || undefined,
       descripcion: form.descripcion, monto: parseDecimalInput(form.monto),
       moneda: form.moneda as 'BS'|'USD',
       tasa: form.tasa ? parseDecimalInput(form.tasa) : undefined,
@@ -307,7 +337,48 @@ function EgresosInner() {
         <form onSubmit={submit} className="space-y-4 mt-2">
           <InputField label="Fecha" value={form.fecha} onChange={v=>setForm(f=>({...f,fecha:v}))} type="date" required/>
           <SelectField label="Categoría" value={form.categoria} onChange={v=>setForm(f=>({...f,categoria:v}))} options={CATEGORIAS_EGRESO} required/>
-          <InputField label="Proveedor (opcional)" value={form.proveedor} onChange={v=>setForm(f=>({...f,proveedor:v}))} placeholder="Nombre del proveedor"/>
+          <div>
+            <label className="label">Proveedor (opcional)</label>
+            {!addingProv ? (
+              <select
+                value={form.proveedor_id}
+                onChange={e => {
+                  if (e.target.value === '__new__') {
+                    setAddingProv(true)
+                  } else {
+                    const p = proveedores.find(p => p.id === e.target.value)
+                    setForm(f => ({ ...f, proveedor_id: e.target.value, proveedor: p?.nombre ?? '' }))
+                  }
+                }}
+                className="input-field"
+              >
+                <option value="">Sin proveedor</option>
+                {proveedores.map(p => (
+                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                ))}
+                <option value="__new__">➕ Agregar nuevo proveedor...</option>
+              </select>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  className="input-field flex-1"
+                  placeholder="Nombre del proveedor"
+                  value={newProvNombre}
+                  onChange={e => setNewProvNombre(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addProveedor() } }}
+                  autoFocus
+                />
+                <button type="button" onClick={addProveedor}
+                  className="bg-brand-orange text-white rounded-xl px-3 text-sm font-semibold active:scale-95 shrink-0">
+                  Guardar
+                </button>
+                <button type="button" onClick={() => { setAddingProv(false); setNewProvNombre('') }}
+                  className="border border-gray-200 rounded-xl px-3 text-sm text-gray-500 active:scale-95 shrink-0">
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
           <InputField label="Descripción" value={form.descripcion} onChange={v=>setForm(f=>({...f,descripcion:v}))} placeholder="Qué se compró..."/>
 
           <div className="grid grid-cols-2 gap-3">

@@ -108,32 +108,40 @@ interface PhotoPickerProps {
   existingUrl?: string
 }
 export function PhotoPicker({ onUpload, existingUrl }: PhotoPickerProps) {
-  const [loading, setLoading] = useState(false)
+  const [phase, setPhase] = useState<'idle' | 'compressing' | 'uploading'>('idle')
   const [preview, setPreview] = useState(existingUrl ?? '')
 
   const handle = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setPreview(URL.createObjectURL(file))
-    setLoading(true)
+    setPhase('compressing')
     try {
       const compressed = await compressImage(file)
+      setPhase('uploading')
       const { url, public_id } = await uploadFoto(compressed)
       onUpload(url, public_id)
     } catch {
-      alert('Error al subir la foto. Intenta con una imagen más pequeña.')
+      alert('Error al subir la foto. Intenta de nuevo.')
     } finally {
-      setLoading(false)
+      setPhase('idle')
     }
   }
+
+  const busy = phase !== 'idle'
 
   return (
     <div>
       <label className="label">Foto de factura</label>
-      <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed
-        border-orange-200 rounded-xl p-4 cursor-pointer hover:bg-orange-50 transition-colors">
-        {loading ? (
-          <Loader2 className="animate-spin text-brand-orange" size={28}/>
+      <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed
+        rounded-xl p-4 transition-colors ${busy ? 'border-orange-300 bg-orange-50 cursor-wait' : 'border-orange-200 cursor-pointer hover:bg-orange-50'}`}>
+        {busy ? (
+          <>
+            <Loader2 className="animate-spin text-brand-orange" size={28}/>
+            <span className="text-sm font-medium text-brand-orange">
+              {phase === 'compressing' ? 'Comprimiendo imagen…' : 'Subiendo foto…'}
+            </span>
+          </>
         ) : preview ? (
           <img src={preview} alt="Factura" className="max-h-40 rounded-xl object-contain"/>
         ) : (
@@ -142,7 +150,7 @@ export function PhotoPicker({ onUpload, existingUrl }: PhotoPickerProps) {
             <span className="text-sm text-gray-500">Toca para tomar foto o elegir imagen</span>
           </>
         )}
-        <input type="file" accept="image/*" capture="environment" onChange={handle} className="hidden"/>
+        <input type="file" accept="image/*" capture="environment" onChange={handle} className="hidden" disabled={busy}/>
       </label>
     </div>
   )
