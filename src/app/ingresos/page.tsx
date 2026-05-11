@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
+import PageHeader from '@/components/PageHeader'
 import {
   Modal, Toast, useToast, ConfirmDialog,
   EmptyState, LoadingSpinner, SelectField, InputField
@@ -264,33 +265,25 @@ function IngresosInner() {
       {toast && <Toast message={toast.message} type={toast.type}/>}
       <ConfirmDialog open={!!confirmId} message="¿Eliminar este ingreso?" onConfirm={() => del(confirmId!)} onCancel={() => setConfirmId(null)}/>
 
-      {/* Header */}
-      <div className="bg-brand-orange px-4 pt-10 pb-5 safe-top">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-white font-bold text-xl">Ingresos</h1>
-            <p className="text-orange-200 text-xs">
-              Total (equiv. Bs): {formatBs(total)}
-            </p>
-            <button
-              type="button"
-              onClick={() => router.push('/configuracion')}
-              className="text-left text-orange-100 text-xs underline decoration-orange-100/70 mt-1 active:opacity-80">
-              Ajustar precios →
-            </button>
-          </div>
-          <button onClick={() => setShowForm(true)} className="bg-white/20 text-white p-3 rounded-xl active:scale-95">
+      <PageHeader
+        title="Ingresos"
+        subtitle={`Total período: ${formatBs(total)}`}
+        colorClass="header-orange"
+        right={
+          <button onClick={() => setShowForm(true)}
+            className="w-10 h-10 rounded-2xl bg-black/15 text-white flex items-center justify-center active:scale-90 transition-transform">
             <Plus size={20}/>
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Filtros */}
-      <div className="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar">
+      <div className="px-4 pt-3 pb-1 flex gap-2 overflow-x-auto no-scrollbar">
         {(['hoy','semana','mes','todo'] as const).map(f => (
           <button key={f} onClick={() => setFiltro(f)}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors
-              ${filtro===f ? 'bg-brand-orange text-white' : 'bg-white border border-orange-200 text-gray-600'}`}>
+            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all
+              ${filtro===f
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'bg-white text-gray-500 border border-gray-200'}`}>
             {f === 'hoy' ? 'Hoy' : f === 'semana' ? 'Esta semana' : f === 'mes' ? 'Este mes' : 'Todo'}
           </button>
         ))}

@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Pencil, Trash2, DollarSign, ChevronDown, ChevronUp } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
+import PageHeader from '@/components/PageHeader'
 import { Modal, Toast, useToast, ConfirmDialog, EmptyState, LoadingSpinner, InputField, SelectField } from '@/components/ui'
 import { formatBs, FORMAS_PAGO_EGRESO, MONEDAS, hoy, parseDecimalInput } from '@/lib/constants'
 import { generateId } from '@/lib/idb'
@@ -79,18 +80,23 @@ export default function ProveedoresPage() {
       {toast && <Toast message={toast.message} type={toast.type}/>}
       <ConfirmDialog open={!!confirmId} message="¿Eliminar este registro?" onConfirm={() => del(confirmId!.id, confirmId!.type)} onCancel={() => setConfirmId(null)}/>
 
-      <div className="bg-brand-brown px-4 pt-10 pb-5 safe-top">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-white font-bold text-xl">Proveedores</h1>
-            <p className="text-orange-200 text-xs">Deuda total: {formatBs(total_pendiente)}</p>
-          </div>
+      <PageHeader
+        title="Proveedores"
+        subtitle={`Deuda total: ${formatBs(total_pendiente)}`}
+        colorClass="header-brown"
+        right={
           <div className="flex gap-2">
-            <button onClick={() => setShowDeudaForm(true)} className="bg-white/20 text-white p-2.5 rounded-xl text-xs active:scale-95">+ Deuda</button>
-            <button onClick={() => setShowProvForm(true)} className="bg-white/20 text-white p-2.5 rounded-xl text-xs active:scale-95">+ Prov.</button>
+            <button onClick={() => setShowDeudaForm(true)}
+              className="px-3 h-9 rounded-xl bg-black/15 text-white text-xs font-bold active:scale-90 transition-transform">
+              + Deuda
+            </button>
+            <button onClick={() => setShowProvForm(true)}
+              className="px-3 h-9 rounded-xl bg-black/15 text-white text-xs font-bold active:scale-90 transition-transform">
+              + Prov.
+            </button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Tabs */}
       <div className="flex border-b border-orange-100 bg-white px-4">

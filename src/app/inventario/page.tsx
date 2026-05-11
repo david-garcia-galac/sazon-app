@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Pencil, Trash2, ArrowDown, ArrowUp, RotateCcw } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
+import PageHeader from '@/components/PageHeader'
 import { Modal, Toast, useToast, ConfirmDialog, EmptyState, LoadingSpinner, InputField, SelectField } from '@/components/ui'
 import { hoy, parseDecimalInput } from '@/lib/constants'
 import { generateId } from '@/lib/idb'
@@ -77,17 +78,17 @@ export default function InventarioPage() {
       {toast && <Toast message={toast.message} type={toast.type}/>}
       <ConfirmDialog open={!!confirmId} message="¿Eliminar este ítem?" onConfirm={() => del(confirmId!)} onCancel={() => setConfirmId(null)}/>
 
-      <div className="bg-green-600 px-4 pt-10 pb-5 safe-top">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-white font-bold text-xl">Inventario</h1>
-            <p className="text-green-200 text-xs">{items.length} ítems · {bajoStock.length} bajo mínimo</p>
-          </div>
-          <button onClick={() => setShowItemForm(true)} className="bg-white/20 text-white p-3 rounded-xl active:scale-95">
+      <PageHeader
+        title="Inventario"
+        subtitle={`${items.length} ítems · ${bajoStock.length} bajo mínimo`}
+        colorClass="header-green"
+        right={
+          <button onClick={() => setShowItemForm(true)}
+            className="w-10 h-10 rounded-2xl bg-black/15 text-white flex items-center justify-center active:scale-90 transition-transform">
             <Plus size={20}/>
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {bajoStock.length > 0 && (
         <div className="mx-4 mt-3 bg-red-50 border border-red-200 rounded-2xl p-3">

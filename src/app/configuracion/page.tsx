@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
+import PageHeader from '@/components/PageHeader'
 import { Toast, useToast, LoadingSpinner, InputField } from '@/components/ui'
 import { BEBIDAS, parseDecimalInput } from '@/lib/constants'
 
@@ -106,24 +107,12 @@ export default function ConfiguracionPage() {
     <div className="pb-24">
       {toast && <Toast message={toast.message} type={toast.type}/>}
 
-      <div className="bg-brand-orange px-4 pt-10 pb-5 safe-top">
-        <div className="flex items-start gap-2">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="p-2 rounded-xl bg-white/20 text-white shrink-0"
-            aria-label="Volver">
-            <ArrowLeft size={20}/>
-          </button>
-          <div>
-            <h1 className="text-white font-bold text-xl leading-tight">Configuración</h1>
-            <p className="text-orange-100 text-xs mt-1">
-              Precios por empanada y bebida (Bs.). Actualizalos cuando cambie la tasa referencial de
-              cada semana según convenga para el margen del negocio.
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Configuración"
+        subtitle="Actualizá los precios cuando cambie la tasa de cada semana"
+        colorClass="header-orange"
+        onBack
+      />
 
       <div className="px-4 pt-4 space-y-5">
         {loading ? (
@@ -170,7 +159,8 @@ export default function ConfiguracionPage() {
               </div>
             </div>
 
-            <button type="button" onClick={() => save()} disabled={saving} className="btn-primary w-full py-4">
+            <button type="button" onClick={() => save()} disabled={saving}
+              className="btn-primary w-full py-4 disabled:opacity-60">
               <Save size={18}/> {saving ? 'Guardando…' : 'Guardar precios'}
             </button>
           </>

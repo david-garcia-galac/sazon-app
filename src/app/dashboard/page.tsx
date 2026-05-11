@@ -199,22 +199,21 @@ export default function DashboardPage() {
             />
 
             <section>
-              <h2 className="section-title">⚡ Acceso rápido</h2>
+              <p className="section-title">Acceso rápido</p>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => router.push('/ingresos?nuevo=1')}
-                  className="btn-primary py-4 text-sm">
+                  className="btn-primary py-4 text-sm font-bold">
                   <Plus size={18}/> Nuevo ingreso
                 </button>
                 <button onClick={() => router.push('/egresos?nuevo=1')}
-                  className="bg-red-500 text-white font-semibold rounded-xl px-5 py-4
-                  active:scale-95 transition-transform flex items-center justify-center gap-2 text-sm">
+                  className="btn-danger py-4 text-sm font-bold">
                   <Plus size={18}/> Nuevo egreso
                 </button>
               </div>
               <button
                 type="button"
                 onClick={() => router.push('/configuracion')}
-                className="mt-3 w-full flex items-center justify-center gap-2 py-4 rounded-xl border-2 border-orange-200 text-brand-brown font-semibold text-sm bg-white active:scale-[0.98] transition-transform">
+                className="mt-3 w-full btn-secondary py-4 text-sm">
                 <Settings size={18}/> Precios empanadas y bebidas
               </button>
             </section>

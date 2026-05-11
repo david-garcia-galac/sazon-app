@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, Image as ImageIcon } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
+import PageHeader from '@/components/PageHeader'
 import {
   Modal, Toast, useToast, ConfirmDialog,
   EmptyState, LoadingSpinner, SelectField, InputField, PhotoPicker
@@ -271,61 +272,71 @@ function EgresosInner() {
       {toast && <Toast message={toast.message} type={toast.type}/>}
       <ConfirmDialog open={!!confirmId} message="¿Eliminar este egreso?" onConfirm={() => del(confirmId!)} onCancel={() => setConfirmId(null)}/>
 
-      <div className="bg-red-500 px-4 pt-10 pb-5 safe-top">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-white font-bold text-xl">Egresos</h1>
-            <p className="text-red-200 text-xs">Total: {formatBs(total)}</p>
-          </div>
-          <button onClick={() => setShowForm(true)} className="bg-white/20 text-white p-3 rounded-xl active:scale-95">
+      <PageHeader
+        title="Egresos"
+        subtitle={`Total período: ${formatBs(total)}`}
+        colorClass="header-red"
+        right={
+          <button onClick={() => setShowForm(true)}
+            className="w-10 h-10 rounded-2xl bg-black/15 text-white flex items-center justify-center active:scale-90 transition-transform">
             <Plus size={20}/>
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar">
+      <div className="px-4 pt-3 pb-1 flex gap-2 overflow-x-auto no-scrollbar">
         {(['hoy','semana','mes','todo'] as const).map(f => (
           <button key={f} onClick={() => setFiltro(f)}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors
-              ${filtro===f ? 'bg-red-500 text-white' : 'bg-white border border-red-200 text-gray-600'}`}>
+            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all
+              ${filtro===f
+                ? 'bg-red-500 text-white shadow-sm'
+                : 'bg-white text-gray-500 border border-gray-200'}`}>
             {f === 'hoy' ? 'Hoy' : f === 'semana' ? 'Esta semana' : f === 'mes' ? 'Este mes' : 'Todo'}
           </button>
         ))}
       </div>
 
-      <div className="px-4 space-y-3">
+      <div className="px-4 pt-2 space-y-3">
         {loading ? <LoadingSpinner/> : egresos.length === 0 ? (
           <EmptyState icon="📤" message="Sin egresos en este período"/>
         ) : egresos.map(e => (
           <div key={e.id} className="card fade-in-up">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                   <span className="chip-red">{labelCategoria(e.categoria)}</span>
-                  <span className="chip-blue">{e.forma_pago}</span>
-                  {e.moneda === 'USD' && <span className="chip-green">USD</span>}
+                  <span className="chip-gray capitalize">{e.forma_pago.replace('_',' ')}</span>
+                  {e.moneda === 'USD' && <span className="chip-blue">USD</span>}
                 </div>
-                <p className="text-xl font-bold text-red-600">
+                <p className="text-2xl font-extrabold text-red-600 leading-tight">
                   {e.moneda === 'USD' ? formatUSD(Number(e.monto)) : formatBs(Number(e.monto))}
                 </p>
                 {e.moneda === 'USD' && e.monto_bs && (
-                  <p className="text-xs text-gray-400">≈ {formatBs(Number(e.monto_bs))}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 font-medium">≈ {formatBs(Number(e.monto_bs))}</p>
                 )}
-                {e.proveedor && <p className="text-xs text-gray-500 mt-0.5">📦 {e.proveedor}</p>}
-                <p className="text-xs text-gray-400">{new Date(e.fecha + 'T12:00:00').toLocaleDateString('es',{day:'numeric',month:'short'})}</p>
+                <div className="flex items-center gap-2 mt-1.5">
+                  {e.proveedor && (
+                    <span className="text-xs text-gray-500 font-medium">📦 {e.proveedor}</span>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {new Date(e.fecha + 'T12:00:00').toLocaleDateString('es',{day:'numeric',month:'short'})}
+                  </span>
+                </div>
               </div>
-              <div className="flex gap-1 ml-2 items-start">
+              <div className="flex gap-1.5 items-center shrink-0">
                 {e.foto_url && (
                   <a href={e.foto_url} target="_blank" rel="noreferrer"
-                    className="p-2 rounded-xl bg-blue-50 active:scale-95">
-                    <ImageIcon size={15} className="text-blue-500"/>
+                    className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center active:scale-90 transition-transform">
+                    <ImageIcon size={14} className="text-blue-500"/>
                   </a>
                 )}
-                <button onClick={() => openEdit(e)} className="p-2 rounded-xl bg-orange-50 active:scale-95">
-                  <Pencil size={15} className="text-brand-orange"/>
+                <button onClick={() => openEdit(e)}
+                  className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center active:scale-90 transition-transform">
+                  <Pencil size={14} className="text-orange-500"/>
                 </button>
-                <button onClick={() => setConfirmId(e.id)} className="p-2 rounded-xl bg-red-50 active:scale-95">
-                  <Trash2 size={15} className="text-red-500"/>
+                <button onClick={() => setConfirmId(e.id)}
+                  className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center active:scale-90 transition-transform">
+                  <Trash2 size={14} className="text-red-500"/>
                 </button>
               </div>
             </div>
@@ -404,7 +415,7 @@ function EgresosInner() {
             onUpload={(url, pid) => setForm(f => ({ ...f, foto_url: url, foto_public_id: pid }))}
           />
 
-          <button type="submit" className="bg-red-500 text-white font-semibold rounded-xl px-5 py-3 active:scale-95 transition-transform w-full flex items-center justify-center gap-2 mt-2">
+          <button type="submit" className="btn-danger w-full mt-2">
             {editing ? '✓ Actualizar egreso' : '+ Registrar egreso'}
           </button>
         </form>
