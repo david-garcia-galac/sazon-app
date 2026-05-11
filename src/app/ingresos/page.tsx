@@ -169,7 +169,7 @@ function IngresosInner() {
           ? 1
           : 0
     setForm({
-      fecha: i.fecha,
+      fecha: (i.fecha ?? '').slice(0, 10),
       tipo: i.tipo,
       bebida: beb,
       cantidad: String(i.cantidad),
