@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { RefreshCw, LogOut, Wifi, WifiOff, Plus, Settings, FileText } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
 import { DashboardDiaResumen, type PeriodoDetalleIngresos } from '@/components/DashboardDiaResumen'
+import InternalUseBanner, { DISCLAIMER_INTERNO } from '@/components/InternalUseBanner'
 import { LoadingSpinner, Toast, useToast } from '@/components/ui'
 import { formatBs, hoy } from '@/lib/constants'
 import { getSyncQueue, clearSyncItem } from '@/lib/idb'
@@ -135,6 +136,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="px-4 pt-3 space-y-4">
+        <InternalUseBanner message={DISCLAIMER_INTERNO}/>
 
 {loading ? <LoadingSpinner/> : (
           <>
