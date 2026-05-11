@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sql, { ensureSchemaPatches, neonRows } from '@/lib/db'
 import { blankPreciosBebidas } from '@/lib/precios-config'
+import { logDbFail, logDbOk } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 
 const CFG_ID = 'default'
+
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  Pragma: 'no-cache',
+}
+
+function jsonNoStore(payload: unknown, init?: ResponseInit) {
+  return NextResponse.json(payload, {
+    ...init,
+    headers: { ...NO_STORE_HEADERS, ...(init?.headers ?? {}) },
+  })
+}
 
 /** Devuelve un objeto desde TEXT, JSONB o ya parseado por el driver Neon. */
 function preciosBebidasFromStored(raw: unknown): Record<string, unknown> {
@@ -62,7 +77,10 @@ export async function GET() {
       await sql`SELECT id, empanada_bs, tasa_bcv, precios_bebidas, updated_at FROM precios_config WHERE id = ${CFG_ID} LIMIT 1`
 
     const r = rowFromPreciosSelect(rawSel)
-    if (!r) return NextResponse.json(payloadDefaults())
+    if (!r) {
+      logDbOk('precios', 'get', { cfg_id: CFG_ID, found: false })
+      return jsonNoStore(payloadDefaults())
+    }
 
     const fromDb = preciosBebidasFromStored(r.precios_bebidas)
     const merged: Record<string, number> = { ...baseBebidas }
@@ -71,7 +89,15 @@ export async function GET() {
       merged[k] = v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : 0
     }
 
-    return NextResponse.json({
+    logDbOk('precios', 'get', {
+      cfg_id: CFG_ID,
+      found: true,
+      empanada_bs: Number(r.empanada_bs),
+      tasa_bcv: r.tasa_bcv,
+      updated_at: r.updated_at,
+    })
+
+    return jsonNoStore({
       empanada_bs: Number(r.empanada_bs),
       tasa_bcv:
         r.tasa_bcv == null || String(r.tasa_bcv) === ''
@@ -81,25 +107,40 @@ export async function GET() {
       updated_at: r.updated_at,
     })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    logDbFail('precios', 'get', e, { cfg_id: CFG_ID })
+    return jsonNoStore({ error: e.message }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
+  let emp: number | undefined
+  let tasa: number | null | undefined
+  let jsonStr: string | undefined
+
   try {
     await ensureSchemaPatches()
 
     const body = await req.json()
-    const emp = Number(body.empanada_bs)
-    if (!Number.isFinite(emp) || emp < 0)
-      return NextResponse.json({ error: 'Precio de empanada no válido' }, { status: 400 })
+    emp = Number(body.empanada_bs)
+    if (!Number.isFinite(emp) || emp < 0) {
+      logDbFail('precios', 'put', new Error('empanada_bs inválido'), {
+        cfg_id: CFG_ID,
+        empanada_bs: body.empanada_bs,
+      })
+      return jsonNoStore({ error: 'Precio de empanada no válido' }, { status: 400 })
+    }
 
-    const tasa =
+    tasa =
       body.tasa_bcv == null || body.tasa_bcv === ''
         ? null
         : Number(body.tasa_bcv)
-    if (tasa != null && (!Number.isFinite(tasa) || tasa <= 0))
-      return NextResponse.json({ error: 'Tasa BCV no válida' }, { status: 400 })
+    if (tasa != null && (!Number.isFinite(tasa) || tasa <= 0)) {
+      logDbFail('precios', 'put', new Error('tasa_bcv inválida'), {
+        cfg_id: CFG_ID,
+        tasa_bcv: body.tasa_bcv,
+      })
+      return jsonNoStore({ error: 'Tasa BCV no válida' }, { status: 400 })
+    }
 
     const base = blankPreciosBebidas()
     const inc = body.precios_bebidas as Record<string, unknown>
@@ -111,7 +152,7 @@ export async function PUT(req: NextRequest) {
           merged[k] = Number(v)
       }
     }
-    const jsonStr = JSON.stringify(merged)
+    jsonStr = JSON.stringify(merged)
 
     const touched = neonRows<{ id: string }>(
       await sql`
@@ -126,30 +167,55 @@ export async function PUT(req: NextRequest) {
       `
     )
 
-    if (!touched.length) {
-      try {
-        await sql`
-          INSERT INTO precios_config (id, empanada_bs, tasa_bcv, precios_bebidas, updated_at)
-          VALUES (${CFG_ID}, ${emp}, ${tasa}, ${jsonStr}, NOW())
-        `
-      } catch (insertErr: unknown) {
-        const msg = String(insertErr instanceof Error ? insertErr.message : insertErr)
-        if (/duplicate|unique|violates/i.test(msg)) {
-          await sql`
-            UPDATE precios_config
-            SET
-              empanada_bs     = ${emp},
-              tasa_bcv        = ${tasa},
-              precios_bebidas = ${jsonStr},
-              updated_at      = NOW()
-            WHERE id = ${CFG_ID}
-          `
-        } else throw insertErr
-      }
+    if (touched.length) {
+      logDbOk('precios', 'put.update', {
+        cfg_id: CFG_ID,
+        empanada_bs: emp,
+        tasa_bcv: tasa,
+        bebidas_keys: Object.keys(merged).length,
+      })
+      return jsonNoStore({ ok: true, mode: 'update' })
     }
 
-    return NextResponse.json({ ok: true })
+    try {
+      await sql`
+        INSERT INTO precios_config (id, empanada_bs, tasa_bcv, precios_bebidas, updated_at)
+        VALUES (${CFG_ID}, ${emp}, ${tasa}, ${jsonStr}, NOW())
+      `
+      logDbOk('precios', 'put.insert', {
+        cfg_id: CFG_ID,
+        empanada_bs: emp,
+        tasa_bcv: tasa,
+        bebidas_keys: Object.keys(merged).length,
+      })
+      return jsonNoStore({ ok: true, mode: 'insert' })
+    } catch (insertErr: unknown) {
+      const msg = String(insertErr instanceof Error ? insertErr.message : insertErr)
+      if (/duplicate|unique|violates/i.test(msg)) {
+        await sql`
+          UPDATE precios_config
+          SET
+            empanada_bs     = ${emp},
+            tasa_bcv        = ${tasa},
+            precios_bebidas = ${jsonStr},
+            updated_at      = NOW()
+          WHERE id = ${CFG_ID}
+        `
+        logDbOk('precios', 'put.update-after-conflict', {
+          cfg_id: CFG_ID,
+          empanada_bs: emp,
+          tasa_bcv: tasa,
+        })
+        return jsonNoStore({ ok: true, mode: 'update-after-conflict' })
+      }
+      throw insertErr
+    }
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    logDbFail('precios', 'put', e, {
+      cfg_id: CFG_ID,
+      empanada_bs: emp,
+      tasa_bcv: tasa,
+    })
+    return jsonNoStore({ error: e.message }, { status: 500 })
   }
 }

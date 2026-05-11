@@ -25,7 +25,10 @@ export default function ConfiguracionPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/precios')
+      const res = await fetch(`/api/precios?_=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
         const msg =
@@ -88,7 +91,11 @@ export default function ConfiguracionPage() {
     try {
       const res = await fetch('/api/precios', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
         body: JSON.stringify(body),
       })
       if (!res.ok) {
@@ -96,6 +103,8 @@ export default function ConfiguracionPage() {
         throw new Error(j.error ?? 'No se guardó')
       }
       show('Precios guardados ✓')
+      // Releemos desde DB para confirmar que lo persistido es lo que el usuario ve.
+      await load()
     } catch (e: unknown) {
       show(String(e instanceof Error ? e.message : 'Error'), 'error')
     } finally {

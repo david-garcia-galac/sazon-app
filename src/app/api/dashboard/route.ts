@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sql, { neonOneRow } from '@/lib/db'
+import { logDbFail, logDbOk } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
+
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  Pragma: 'no-cache',
+}
+
+function jsonNoStore(payload: unknown, init?: ResponseInit) {
+  return NextResponse.json(payload, {
+    ...init,
+    headers: { ...NO_STORE_HEADERS, ...(init?.headers ?? {}) },
+  })
+}
 
 /** Agregados de ingresos para un día (pestañas Bs / USD / conciliación en el panel). */
 async function aggIngresosDia(dia: string) {
@@ -50,7 +65,6 @@ export async function GET(req: NextRequest) {
   let diaResumen = searchParams.get('dia') ?? hasta
   if (diaResumen > hasta) diaResumen = hasta
 
-  // Garantizar que las tablas existan antes de cualquier consulta
   try {
     await sql`CREATE TABLE IF NOT EXISTS ingresos (
       id TEXT PRIMARY KEY, fecha DATE NOT NULL, tipo TEXT NOT NULL,
@@ -100,8 +114,8 @@ export async function GET(req: NextRequest) {
         WHERE d.estado IN ('pendiente','parcial')
         ORDER BY d.fecha_vencimiento ASC NULLS LAST LIMIT 5
       `
-    } catch {
-      // Tablas de proveedores/deudas aún no creadas
+    } catch (deudasErr) {
+      logDbFail('dashboard', 'get.deudas', deudasErr, { dia: diaResumen })
     }
 
     const inRow = neonOneRow<{ total: number; ventas: number }>(rawInDia, ['total', 'ventas'])
@@ -109,6 +123,15 @@ export async function GET(req: NextRequest) {
 
     const iDia = Number(inRow?.total ?? 0)
     const eDia = Number(egRow?.total ?? 0)
+
+    logDbOk('dashboard', 'get', {
+      hoy: hasta,
+      dia: diaResumen,
+      ingresos: iDia,
+      egresos: eDia,
+      ventas: Number(inRow?.ventas ?? 0),
+      deudas: deudas.length,
+    })
 
     const mkDet = (d: Record<string, number>) => ({
       bs: {
@@ -132,7 +155,7 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({
+    return jsonNoStore({
       diaResumen,
       hoy: {
         ingresos: iDia,
@@ -144,6 +167,7 @@ export async function GET(req: NextRequest) {
       ingresosDetalleHoy: mkDet(detDia),
     })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    logDbFail('dashboard', 'get', e, { hoy: hasta, dia: diaResumen })
+    return jsonNoStore({ error: e.message }, { status: 500 })
   }
 }

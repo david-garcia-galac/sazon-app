@@ -46,7 +46,8 @@ export default function DashboardPage() {
     try {
       if (!background) setLoading(true)
       const res = await fetch(
-        `/api/dashboard?hoy=${encodeURIComponent(hoy())}&dia=${encodeURIComponent(fechaDia)}`
+        `/api/dashboard?hoy=${encodeURIComponent(hoy())}&dia=${encodeURIComponent(fechaDia)}&_=${Date.now()}`,
+        { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }
       )
       if (res.ok) setData(await res.json())
       else if (!background) show('No se pudo cargar el resumen', 'error')
