@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, LogOut, Wifi, WifiOff, Plus, Settings } from 'lucide-react'
+import { RefreshCw, LogOut, Wifi, WifiOff, Plus, Settings, FileText } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
 import { DashboardDiaResumen, type PeriodoDetalleIngresos } from '@/components/DashboardDiaResumen'
 import { LoadingSpinner, Toast, useToast } from '@/components/ui'
@@ -197,6 +197,12 @@ export default function DashboardPage() {
                 onClick={() => router.push('/configuracion')}
                 className="mt-3 w-full btn-secondary py-4 text-sm">
                 <Settings size={18}/> Precios empanadas y bebidas
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/reportes')}
+                className="mt-3 w-full btn-secondary py-4 text-sm">
+                <FileText size={18}/> Reportes y envío por WhatsApp
               </button>
             </section>
           </>
