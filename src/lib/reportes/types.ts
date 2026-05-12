@@ -41,9 +41,10 @@ export interface EgresoRow {
 export interface Totales {
   ingresosBs: number
   ingresosUsd: number
+  ingresosEquivBs: number   // Bs equiv of USD sales (monto stored at time of sale)
   egresosBs: number
   egresosUsd: number
-  saldoBs: number
+  saldoBs: number           // total Bs + USD equiv - egresos Bs
   ventas: number
 }
 

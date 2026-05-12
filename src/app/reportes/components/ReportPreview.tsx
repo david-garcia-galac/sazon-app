@@ -71,19 +71,27 @@ export default function ReportPreview({ data }: Props) {
 
         <div className="grid grid-cols-2 gap-2">
           <Mini
-            label="Ingresos"
+            label="Ingresos Bs"
             value={`Bs ${formatBs(data.totales.ingresosBs).replace(' Bs', '')}`}
-            sub={`${formatUSD(data.totales.ingresosUsd)} USD`}
+            sub={data.totales.ingresosUsd > 0 ? `+ ${formatUSD(data.totales.ingresosUsd)} USD` : undefined}
             color="green"
           />
+          {data.totales.ingresosEquivBs > 0 && (
+            <Mini
+              label="Divisas (equiv. Bs)"
+              value={`Bs ${formatBs(data.totales.ingresosEquivBs).replace(' Bs', '')}`}
+              sub={formatUSD(data.totales.ingresosUsd)}
+              color="green"
+            />
+          )}
           <Mini
             label="Egresos"
             value={`Bs ${formatBs(data.totales.egresosBs).replace(' Bs', '')}`}
-            sub={`${formatUSD(data.totales.egresosUsd)} USD`}
+            sub={data.totales.egresosUsd > 0 ? `${formatUSD(data.totales.egresosUsd)} USD` : undefined}
             color="red"
           />
           <Mini
-            label="Saldo Bs"
+            label="Saldo total"
             value={`Bs ${formatBs(data.totales.saldoBs).replace(' Bs', '')}`}
             color={data.totales.saldoBs >= 0 ? 'green' : 'red'}
           />
@@ -98,26 +106,43 @@ export default function ReportPreview({ data }: Props) {
             <Empty msg="Sin ingresos en el rango" />
           ) : (
             <ul className="divide-y divide-gray-100">
-              {data.ingresos.slice(0, 30).map((r) => (
-                <li key={r.id} className="flex items-center justify-between py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-800 truncate">
-                      {r.tipo}{' '}
-                      {r.bebida && r.bebida !== 'sin_bebida' && (
-                        <span className="text-gray-400">· {r.bebida.replace(/_/g, ' ')}</span>
+              {data.ingresos.slice(0, 30).map((r) => {
+                const tipoLabel =
+                  r.tipo === 'desayuno' ? '🥟 Empanadas' :
+                  r.tipo === 'almuerzo' ? '☀️ Almuerzo'  :
+                  r.tipo === 'bebida'   ? `🥤 ${(r.bebida ?? '').replace(/_/g, ' ')}` :
+                  r.tipo
+                const pagoLabel =
+                  r.forma_pago === 'pago_movil'   ? 'Pago móvil'    :
+                  r.forma_pago === 'transferencia' ? 'Punto de Venta' :
+                  r.forma_pago
+                return (
+                  <li key={r.id} className="flex items-center justify-between py-2.5 gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">
+                        {tipoLabel}
+                        {r.moneda === 'USD' && (
+                          <span className="ml-1.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">USD</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {formatoFechaLista(r.fecha)} · {pagoLabel}
+                        {r.moneda === 'USD' && r.tasa ? ` · tasa ${r.tasa}` : ''}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-bold text-emerald-700">
+                        {r.moneda === 'USD'
+                          ? formatUSD(Number(r.monto_usd ?? 0))
+                          : formatBs(Number(r.monto))}
+                      </p>
+                      {r.moneda === 'USD' && (
+                        <p className="text-[10px] text-gray-400">≈ {formatBs(Number(r.monto))}</p>
                       )}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {formatoFechaLista(r.fecha)} · {r.forma_pago}
-                    </p>
-                  </div>
-                  <p className="text-sm font-bold text-emerald-700 shrink-0">
-                    {r.moneda === 'USD'
-                      ? formatUSD(Number(r.monto_usd ?? 0))
-                      : formatBs(Number(r.monto))}
-                  </p>
-                </li>
-              ))}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
           {data.ingresos.length > 30 && (

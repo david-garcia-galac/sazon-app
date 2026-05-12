@@ -41,9 +41,14 @@ function asRange(s: string | null): ReportRange | null {
 function totales(ingresos: IngresoRow[], egresos: EgresoRow[]): Totales {
   let ingresosBs = 0
   let ingresosUsd = 0
+  let ingresosEquivBs = 0
   for (const r of ingresos) {
-    if (r.moneda === 'USD') ingresosUsd += Number(r.monto_usd ?? 0)
-    else ingresosBs += Number(r.monto ?? 0)
+    if (r.moneda === 'USD') {
+      ingresosUsd += Number(r.monto_usd ?? 0)
+      ingresosEquivBs += Number(r.monto ?? 0)  // monto = Bs equiv stored at registration
+    } else {
+      ingresosBs += Number(r.monto ?? 0)
+    }
   }
   let egresosBs = 0
   let egresosUsd = 0
@@ -58,9 +63,10 @@ function totales(ingresos: IngresoRow[], egresos: EgresoRow[]): Totales {
   return {
     ingresosBs,
     ingresosUsd,
+    ingresosEquivBs,
     egresosBs,
     egresosUsd,
-    saldoBs: ingresosBs - egresosBs,
+    saldoBs: ingresosBs + ingresosEquivBs - egresosBs,
     ventas: ingresos.length,
   }
 }

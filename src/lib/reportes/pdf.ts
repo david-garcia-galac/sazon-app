@@ -77,17 +77,23 @@ function footer(doc: jsPDF) {
 
 function totalesBlock(doc: jsPDF, data: ReportData, startY: number): number {
   const t = data.totales
+  const body: (string | number)[][] = [
+    ['Ingresos Bs', `Bs ${fmtBs(t.ingresosBs)}`],
+  ]
+  if (t.ingresosUsd > 0) {
+    body.push(['Ingresos en divisas (USD)', `$ ${fmtUsd(t.ingresosUsd)}`])
+    body.push(['Divisas equiv. Bs', `Bs ${fmtBs(t.ingresosEquivBs)}`])
+  }
+  body.push(
+    ['Egresos (Bs)', `Bs ${fmtBs(t.egresosBs)}`],
+    ...(t.egresosUsd > 0 ? [['Egresos (USD)', `$ ${fmtUsd(t.egresosUsd)}`]] : []),
+    ['Saldo total (Bs)', `Bs ${fmtBs(t.saldoBs)}`],
+    ['Ventas registradas', String(t.ventas)],
+  )
   autoTable(doc, {
     startY,
     head: [['Resumen del período', 'Valor']],
-    body: [
-      ['Ingresos (Bs)', `Bs ${fmtBs(t.ingresosBs)}`],
-      ['Ingresos (USD)', `$ ${fmtUsd(t.ingresosUsd)}`],
-      ['Egresos (Bs)', `Bs ${fmtBs(t.egresosBs)}`],
-      ['Egresos (USD)', `$ ${fmtUsd(t.egresosUsd)}`],
-      ['Saldo neto (Bs)', `Bs ${fmtBs(t.saldoBs)}`],
-      ['Ventas registradas', String(t.ventas)],
-    ],
+    body,
     theme: 'grid',
     headStyles: { fillColor: [BRAND.r, BRAND.g, BRAND.b], textColor: 255, fontStyle: 'bold' },
     styles: { fontSize: 10, cellPadding: 3 },
@@ -98,21 +104,34 @@ function totalesBlock(doc: jsPDF, data: ReportData, startY: number): number {
   return (doc.lastAutoTable?.finalY as number) ?? startY + 60
 }
 
+function tipoLabel(r: IngresoRow): string {
+  if (r.tipo === 'desayuno') return 'Empanadas'
+  if (r.tipo === 'almuerzo') return 'Almuerzo'
+  if (r.tipo === 'bebida')   return (r.bebida ?? '').replace(/_/g, ' ') || 'Bebida'
+  return r.tipo
+}
+
+function pagoLabel(fp: string): string {
+  if (fp === 'pago_movil')   return 'Pago móvil'
+  if (fp === 'transferencia') return 'Pto. Venta'
+  return fp
+}
+
 function ingresosTable(doc: jsPDF, rows: IngresoRow[], startY: number): number {
   if (!rows.length) return startY
+  const hasUsd = rows.some(r => r.moneda === 'USD')
   autoTable(doc, {
     startY: startY + 6,
-    head: [['Fecha', 'Tipo', 'Bebida', 'Cant.', 'Monto', 'Moneda', 'Forma pago']],
+    head: [['Fecha', 'Producto', 'Cant.', 'Monto', ...(hasUsd ? ['Equiv. Bs'] : []), 'Forma pago']],
     body: rows.map((r) => [
       fmtFecha(r.fecha),
-      r.tipo,
-      r.bebida ?? '—',
+      tipoLabel(r),
       r.cantidad,
       r.moneda === 'USD'
         ? `$ ${fmtUsd(Number(r.monto_usd ?? 0))}`
         : `Bs ${fmtBs(Number(r.monto))}`,
-      r.moneda,
-      r.forma_pago,
+      ...(hasUsd ? [r.moneda === 'USD' ? `Bs ${fmtBs(Number(r.monto))}` : '—'] : []),
+      pagoLabel(r.forma_pago),
     ]),
     theme: 'striped',
     headStyles: { fillColor: [BRAND.r, BRAND.g, BRAND.b], textColor: 255, fontStyle: 'bold' },
