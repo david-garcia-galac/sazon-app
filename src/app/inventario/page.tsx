@@ -82,6 +82,7 @@ export default function InventarioPage() {
         title="Inventario"
         subtitle={`${items.length} ítems · ${bajoStock.length} bajo mínimo`}
         colorClass="header-green"
+        showLogout
         right={
           <button onClick={() => setShowItemForm(true)}
             className="w-10 h-10 rounded-2xl bg-black/15 text-white flex items-center justify-center active:scale-90 transition-transform">

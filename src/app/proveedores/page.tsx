@@ -84,6 +84,7 @@ export default function ProveedoresPage() {
         title="Proveedores"
         subtitle={`Deuda total: ${formatBs(total_pendiente)}`}
         colorClass="header-brown"
+        showLogout
         right={
           <div className="flex gap-2">
             <button onClick={() => setShowDeudaForm(true)}

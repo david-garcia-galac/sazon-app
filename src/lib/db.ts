@@ -190,6 +190,9 @@ export async function ensureSchemaPatches() {
     /* ya hay PK / tabla distinta */
   }
   try {
+    await sql`ALTER TABLE precios_config ADD COLUMN IF NOT EXISTS productos_catalog TEXT NOT NULL DEFAULT '[]'`
+  } catch { /* columna ya existe */ }
+  try {
     await sql`ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS cantidad_bebida INTEGER NOT NULL DEFAULT 0`
   } catch {
     // Si aún no existe `ingresos` (DB vacía) u otro error de permisos, no bloquea precios_config.

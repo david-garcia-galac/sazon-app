@@ -113,8 +113,35 @@ export function labelCategoria(value: string): string {
   return CATEGORIAS_EGRESO.find(c => c.value === value)?.label ?? value
 }
 
-export function labelBebida(value: string): string {
+export type ProductoCatalog = {
+  id: string
+  name: string
+  emoji: string
+  price: number
+}
+
+export const PRODUCTOS_DEFAULT: ProductoCatalog[] = [
+  { id: 'refresco_350ml',    name: 'Refresco 350ml',        emoji: '🥤', price: 590 },
+  { id: 'jugo_valle_500ml',  name: 'Jugo del Valle 500ml',  emoji: '🧃', price: 720 },
+  { id: 'malta_botella',     name: 'Malta botella 222ml',   emoji: '🍺', price: 580 },
+  { id: 'fruton',            name: 'Fruton',                 emoji: '🍹', price: 560 },
+  { id: 'justy_400ml',       name: 'Justy 400ml',           emoji: '🧃', price: 580 },
+  { id: 'malta_desechable',  name: 'Malta desechable 250ml',emoji: '🍺', price: 690 },
+  { id: 'malta_lata_355ml',  name: 'Malta lata 355ml',      emoji: '🍺', price: 700 },
+  { id: 'agua_pequena',      name: 'Agua pequeña 355ml',    emoji: '💧', price: 250 },
+  { id: 'agua_grande',       name: 'Agua grande 600ml',     emoji: '💧', price: 500 },
+  { id: 'jugo_natural',      name: 'Jugo natural',           emoji: '🥤', price: 590 },
+  { id: 'energizante_400ml', name: 'Energizante 400ml',     emoji: '⚡', price: 600 },
+  { id: 'galleta_club',      name: 'Galleta Club Social',   emoji: '🍪', price: 290 },
+  { id: 'caramelos',         name: 'Caramelos',             emoji: '🍬', price: 25  },
+]
+
+export function labelBebida(value: string, catalog?: ProductoCatalog[]): string {
   if (!value) return 'Sin bebida'
+  if (catalog) {
+    const prod = catalog.find((p) => p.id === value)
+    if (prod) return prod.name
+  }
   return BEBIDAS.find((b) => b.value === value)?.label ?? value.replace(/_/g, ' ')
 }
 

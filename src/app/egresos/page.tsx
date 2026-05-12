@@ -276,6 +276,7 @@ function EgresosInner() {
         title="Egresos"
         subtitle={`Total período: ${formatBs(total)}`}
         colorClass="header-red"
+        showLogout
         right={
           <button onClick={() => setShowForm(true)}
             className="w-10 h-10 rounded-2xl bg-black/15 text-white flex items-center justify-center active:scale-90 transition-transform">

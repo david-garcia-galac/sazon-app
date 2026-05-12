@@ -19,6 +19,7 @@ import {
   labelBebida,
   parseDecimalInput,
 } from '@/lib/constants'
+import type { ProductoCatalog } from '@/lib/constants'
 import { generateId } from '@/lib/idb'
 import type { Ingreso } from '@/lib/idb'
 
@@ -26,22 +27,19 @@ type PreciosCfg = {
   empanada_bs: number
   tasa_bcv: number | null
   precios_bebidas: Record<string, number>
+  productos_catalog: ProductoCatalog[]
 }
 
-const BEBIDAS_MENU = [
-  { value: 'coca_cola',    emoji: '🥤', name: 'Coca-Cola',    desc: 'Refrescante y fría' },
-  { value: 'jugo_natural', emoji: '🧃', name: 'Jugo Natural', desc: 'Hecha en casa' },
-  { value: 'malta',        emoji: '🍺', name: 'Malta',        desc: 'Malta bien fría' },
-  { value: 'agua',         emoji: '💧', name: 'Agua',         desc: 'Agua fría' },
-]
-
-function ProductCard({ emoji, name, desc, price, quantity, onAdd, onRemove }: {
-  emoji: string; name: string; desc: string; price: string
+function ProductCard({ emoji, imageSrc, name, desc, price, quantity, onAdd, onRemove }: {
+  emoji: string; imageSrc?: string; name: string; desc: string; price: string
   quantity: number; onAdd: () => void; onRemove: () => void
 }) {
   return (
     <div className={`rounded-2xl border-2 p-3 transition-colors ${quantity > 0 ? 'border-orange-400 bg-orange-50' : 'border-gray-100 bg-white shadow-sm'}`}>
-      <div className="text-3xl mb-2">{emoji}</div>
+      {imageSrc
+        ? <img src={imageSrc} alt={name} className="w-12 h-12 object-contain mb-2"/>
+        : <div className="text-3xl mb-2">{emoji}</div>
+      }
       <p className="font-bold text-sm text-gray-800 leading-tight">{name}</p>
       <p className="text-xs text-gray-400 mt-0.5 mb-1.5 leading-snug">{desc}</p>
       <p className="text-xs font-bold text-brand-orange mb-3">{price}</p>
@@ -146,6 +144,7 @@ function IngresosInner() {
             empanada_bs: Number(d.empanada_bs),
             tasa_bcv: d.tasa_bcv == null ? null : Number(d.tasa_bcv),
             precios_bebidas: d.precios_bebidas as Record<string, number>,
+            productos_catalog: (Array.isArray(d.productos_catalog) ? d.productos_catalog : []) as ProductoCatalog[],
           }
         return null
       })
@@ -171,7 +170,10 @@ function IngresosInner() {
     const sin =
       !form.bebida || form.bebida === 'sin_bebida'
     const nBeb = sin ? 0 : parseInt(form.cantidad_bebida, 10) || 0
-    const precioUni = preciosCfg.precios_bebidas[form.bebida] ?? 0
+    const precioUni =
+      preciosCfg.productos_catalog.find((p) => p.id === form.bebida)?.price
+      ?? preciosCfg.precios_bebidas[form.bebida]
+      ?? 0
     const tot =
       n * preciosCfg.empanada_bs + nBeb * precioUni
     const next = tot.toFixed(2)
@@ -302,6 +304,7 @@ function IngresosInner() {
         title="Ingresos"
         subtitle={`Total período: ${formatBs(total)}`}
         colorClass="header-orange"
+        showLogout
         right={
           <button onClick={() => setShowForm(true)}
             className="w-10 h-10 rounded-2xl bg-black/15 text-white flex items-center justify-center active:scale-90 transition-transform">
@@ -367,7 +370,7 @@ function IngresosInner() {
                       Number(i.cantidad_bebida) > 0
                         ? Number(i.cantidad_bebida)
                         : 1
-                    return ` · ${labelBebida(b)} × ${q}`
+                    return ` · ${labelBebida(b, preciosCfg?.productos_catalog)} × ${q}`
                   })()}
                   {' · '}
                   {formatoFechaLista(i.fecha)}
@@ -418,7 +421,8 @@ function IngresosInner() {
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Producto</p>
             <div className="grid grid-cols-2 gap-3">
               <ProductCard
-                emoji="🥟"
+                emoji=""
+                imageSrc="/empanada.png"
                 name="Empanadas"
                 desc="De queso, carne o pollo"
                 price={preciosCfg ? `${formatBs(preciosCfg.empanada_bs)} c/u` : '—'}
@@ -464,30 +468,29 @@ function IngresosInner() {
               Bebidas <span className="normal-case font-normal">(opcional)</span>
             </p>
             <div className="grid grid-cols-2 gap-3">
-              {BEBIDAS_MENU.map((beb) => {
-                const qty = form.bebida === beb.value ? parseInt(form.cantidad_bebida) || 0 : 0
-                const unitPrice = preciosCfg?.precios_bebidas[beb.value]
+              {(preciosCfg?.productos_catalog ?? []).map((prod) => {
+                const qty = form.bebida === prod.id ? parseInt(form.cantidad_bebida) || 0 : 0
                 return (
                   <ProductCard
-                    key={beb.value}
-                    emoji={beb.emoji}
-                    name={beb.name}
-                    desc={beb.desc}
-                    price={unitPrice != null ? `${formatBs(unitPrice)} c/u` : '—'}
+                    key={prod.id}
+                    emoji={prod.emoji}
+                    name={prod.name}
+                    desc=""
+                    price={`${formatBs(prod.price)} c/u`}
                     quantity={qty}
                     onAdd={() =>
                       setForm((f) => ({
                         ...f,
-                        bebida: beb.value,
-                        cantidad_bebida: String((f.bebida === beb.value ? parseInt(f.cantidad_bebida) || 0 : 0) + 1),
+                        bebida: prod.id,
+                        cantidad_bebida: String((f.bebida === prod.id ? parseInt(f.cantidad_bebida) || 0 : 0) + 1),
                       }))
                     }
                     onRemove={() => {
-                      if (form.bebida !== beb.value) return
+                      if (form.bebida !== prod.id) return
                       const next = Math.max(0, (parseInt(form.cantidad_bebida) || 0) - 1)
                       setForm((f) => ({
                         ...f,
-                        bebida: next === 0 ? 'sin_bebida' : beb.value,
+                        bebida: next === 0 ? 'sin_bebida' : prod.id,
                         cantidad_bebida: String(next),
                       }))
                     }}

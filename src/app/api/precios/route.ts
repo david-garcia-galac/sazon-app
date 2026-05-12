@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import sql, { ensureSchemaPatches, neonRows } from '@/lib/db'
 import { blankPreciosBebidas } from '@/lib/precios-config'
 import { logDbFail, logDbOk } from '@/lib/logger'
+import { PRODUCTOS_DEFAULT } from '@/lib/constants'
+import type { ProductoCatalog } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -35,12 +37,22 @@ function preciosBebidasFromStored(raw: unknown): Record<string, unknown> {
   return {}
 }
 
+function parseCatalog(raw: unknown): ProductoCatalog[] {
+  if (!raw) return PRODUCTOS_DEFAULT
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed as ProductoCatalog[]
+  } catch { /* noop */ }
+  return PRODUCTOS_DEFAULT
+}
+
 function rowFromPreciosSelect(rawSel: unknown) {
   type R = {
     id: string
     empanada_bs: string | number
     tasa_bcv: string | number | null
     precios_bebidas: unknown
+    productos_catalog: unknown
     updated_at: string | null
   }
   let rows = neonRows<R>(rawSel)
@@ -74,7 +86,7 @@ export async function GET() {
     const baseBebidas = blankPreciosBebidas()
 
     const rawSel =
-      await sql`SELECT id, empanada_bs, tasa_bcv, precios_bebidas, updated_at FROM precios_config WHERE id = ${CFG_ID} LIMIT 1`
+      await sql`SELECT id, empanada_bs, tasa_bcv, precios_bebidas, productos_catalog, updated_at FROM precios_config WHERE id = ${CFG_ID} LIMIT 1`
 
     const r = rowFromPreciosSelect(rawSel)
     if (!r) {
@@ -104,6 +116,7 @@ export async function GET() {
           ? null
           : Number(r.tasa_bcv),
       precios_bebidas: merged,
+      productos_catalog: parseCatalog(r.productos_catalog),
       updated_at: r.updated_at,
     })
   } catch (e: any) {
@@ -116,6 +129,7 @@ export async function PUT(req: NextRequest) {
   let emp: number | undefined
   let tasa: number | null | undefined
   let jsonStr: string | undefined
+  let catalogStr: string | undefined
 
   try {
     await ensureSchemaPatches()
@@ -154,14 +168,20 @@ export async function PUT(req: NextRequest) {
     }
     jsonStr = JSON.stringify(merged)
 
+    const incomingCatalog = body.productos_catalog
+    catalogStr = Array.isArray(incomingCatalog)
+      ? JSON.stringify(incomingCatalog)
+      : JSON.stringify(PRODUCTOS_DEFAULT)
+
     const touched = neonRows<{ id: string }>(
       await sql`
         UPDATE precios_config
         SET
-          empanada_bs     = ${emp},
-          tasa_bcv        = ${tasa},
-          precios_bebidas = ${jsonStr},
-          updated_at      = NOW()
+          empanada_bs       = ${emp},
+          tasa_bcv          = ${tasa},
+          precios_bebidas   = ${jsonStr},
+          productos_catalog = ${catalogStr},
+          updated_at        = NOW()
         WHERE id = ${CFG_ID}
         RETURNING id
       `
@@ -179,8 +199,8 @@ export async function PUT(req: NextRequest) {
 
     try {
       await sql`
-        INSERT INTO precios_config (id, empanada_bs, tasa_bcv, precios_bebidas, updated_at)
-        VALUES (${CFG_ID}, ${emp}, ${tasa}, ${jsonStr}, NOW())
+        INSERT INTO precios_config (id, empanada_bs, tasa_bcv, precios_bebidas, productos_catalog, updated_at)
+        VALUES (${CFG_ID}, ${emp}, ${tasa}, ${jsonStr}, ${catalogStr}, NOW())
       `
       logDbOk('precios', 'put.insert', {
         cfg_id: CFG_ID,
@@ -195,10 +215,11 @@ export async function PUT(req: NextRequest) {
         await sql`
           UPDATE precios_config
           SET
-            empanada_bs     = ${emp},
-            tasa_bcv        = ${tasa},
-            precios_bebidas = ${jsonStr},
-            updated_at      = NOW()
+            empanada_bs       = ${emp},
+            tasa_bcv          = ${tasa},
+            precios_bebidas   = ${jsonStr},
+            productos_catalog = ${catalogStr},
+            updated_at        = NOW()
           WHERE id = ${CFG_ID}
         `
         logDbOk('precios', 'put.update-after-conflict', {

@@ -103,6 +103,7 @@ export default function ReportesPage() {
         subtitle="Generá PDF y enviá por WhatsApp"
         colorClass="header-orange"
         onBack
+        showLogout
         right={
           <button
             type="button"
