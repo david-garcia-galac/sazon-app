@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useEffect, useState, useCallback, Suspense, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
@@ -30,6 +30,8 @@ type PreciosCfg = {
   productos_catalog: ProductoCatalog[]
 }
 
+// ── ProductCard ───────────────────────────────────────────────────────────────
+
 function ProductCard({ emoji, imageSrc, name, desc, price, quantity, onAdd, onRemove }: {
   emoji: string; imageSrc?: string; name: string; desc: string; price: string
   quantity: number; onAdd: () => void; onRemove: () => void
@@ -37,7 +39,7 @@ function ProductCard({ emoji, imageSrc, name, desc, price, quantity, onAdd, onRe
   return (
     <div className={`rounded-2xl border-2 p-3 transition-colors ${quantity > 0 ? 'border-orange-400 bg-orange-50' : 'border-gray-100 bg-white shadow-sm'}`}>
       {imageSrc
-        ? <img src={imageSrc} alt={name} className="w-12 h-12 object-contain mb-2"/>
+        ? <img src={imageSrc} alt={name} className="w-12 h-12 object-contain mb-2" />
         : <div className="text-3xl mb-2">{emoji}</div>
       }
       <p className="font-bold text-sm text-gray-800 leading-tight">{name}</p>
@@ -65,42 +67,83 @@ function ProductCard({ emoji, imageSrc, name, desc, price, quantity, onAdd, onRe
   )
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function etiquetaFormaIngreso(fp: string): { icon: string; label: string } {
   switch (fp) {
-    case 'pago_movil':
-      return { icon: '📱', label: 'Pago móvil' }
-    case 'transferencia':
-      return { icon: '🏦', label: 'Transferencia' }
-    default:
-      return { icon: '💵', label: 'Efectivo' }
+    case 'pago_movil':   return { icon: '📱', label: 'Pago móvil' }
+    case 'transferencia': return { icon: '💳', label: 'Punto de Venta' }
+    default:              return { icon: '💵', label: 'Efectivo' }
   }
 }
 
-function IngresosInner() {
-  const [ingresos, setIngresos] = useState<Ingreso[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing]   = useState<Ingreso | null>(null)
-  const [confirmId, setConfirmId] = useState<string|null>(null)
-  const [filtro, setFiltro]     = useState<'hoy'|'semana'|'mes'|'todo'>('hoy')
-  const [preciosCfg, setPreciosCfg] = useState<PreciosCfg | null>(null)
-  const { toast, show } = useToast()
-  const searchParams = useSearchParams()
-  const router = useRouter()
+function chipTipo(tipo: string) {
+  if (tipo === 'desayuno') return { cls: 'chip-amber',  lbl: '🥟 Empanadas' }
+  if (tipo === 'almuerzo') return { cls: 'chip-orange', lbl: '☀️ Almuerzo'  }
+  return                          { cls: 'chip-blue',   lbl: '🥤 Bebida'    }
+}
 
-  // Form state
-  const [form, setForm] = useState({
-    fecha: hoy(),
-    tipo: 'desayuno',
-    bebida: '',
-    cantidad: '1',
-    cantidad_bebida: '0',
-    monto: '',
-    moneda: 'BS' as 'BS' | 'USD',
-    tasa: '',
-    forma_pago: 'efectivo',
-    notas: '',
-  })
+// ── Cart types ────────────────────────────────────────────────────────────────
+
+type CartState = {
+  fecha: string
+  empanadas: number
+  almuerzo: number
+  almuerzoMonto: string          // manual Bs price when almuerzo > 0
+  bebidas: Record<string, number> // prodId → qty
+  moneda: 'BS' | 'USD'
+  tasa: string
+  montoUsd: string
+  forma_pago: string
+  notas: string
+}
+
+const emptyCart = (): CartState => ({
+  fecha: hoy(),
+  empanadas: 0,
+  almuerzo: 0,
+  almuerzoMonto: '',
+  bebidas: {},
+  moneda: 'BS',
+  tasa: '',
+  montoUsd: '',
+  forma_pago: 'efectivo',
+  notas: '',
+})
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+function IngresosInner() {
+  const [ingresos, setIngresos]   = useState<Ingreso[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [showForm, setShowForm]   = useState(false)
+  const [editing, setEditing]     = useState<Ingreso | null>(null)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [filtro, setFiltro]       = useState<'hoy' | 'semana' | 'mes' | 'todo'>('hoy')
+  const [preciosCfg, setPreciosCfg] = useState<PreciosCfg | null>(null)
+  const [cart, setCart]           = useState<CartState>(emptyCart)
+  const { toast, show }           = useToast()
+  const searchParams              = useSearchParams()
+  const router                    = useRouter()
+
+  // ── Computed ────────────────────────────────────────────────────────────────
+
+  const autoTotalBs = useMemo(() => {
+    if (!preciosCfg || cart.moneda !== 'BS') return 0
+    let t = cart.empanadas * preciosCfg.empanada_bs
+    if (cart.almuerzo > 0) t += parseDecimalInput(cart.almuerzoMonto) || 0
+    for (const [id, qty] of Object.entries(cart.bebidas)) {
+      if (qty <= 0) continue
+      const prod = preciosCfg.productos_catalog.find(p => p.id === id)
+      t += (prod?.price ?? 0) * qty
+    }
+    return t
+  }, [cart.empanadas, cart.almuerzo, cart.almuerzoMonto, cart.bebidas, cart.moneda, preciosCfg])
+
+  const hasItems = cart.empanadas > 0 || cart.almuerzo > 0 ||
+    Object.values(cart.bebidas).some(q => q > 0)
+
+  // ── Data loading ─────────────────────────────────────────────────────────────
 
   const getFechas = () => {
     const hoyStr = hoy()
@@ -124,22 +167,17 @@ function IngresosInner() {
     try {
       const res = await fetch(`/api/ingresos?desde=${desde}&hasta=${hasta}`)
       if (res.ok) setIngresos(await res.json())
-    } catch {} finally { setLoading(false) }
+    } catch { } finally { setLoading(false) }
   }, [filtro])
 
   useEffect(() => { load() }, [load])
 
   const cargarPrecios = useCallback(() => {
     fetch('/api/precios')
-      .then(async (r) => {
+      .then(async r => {
         if (!r.ok) return null
         const d = await r.json()
-        if (
-          d &&
-          typeof d.precios_bebidas === 'object' &&
-          d.precios_bebidas != null &&
-          Number.isFinite(Number(d.empanada_bs))
-        )
+        if (d && typeof d.precios_bebidas === 'object' && Number.isFinite(Number(d.empanada_bs)))
           return {
             empanada_bs: Number(d.empanada_bs),
             tasa_bcv: d.tasa_bcv == null ? null : Number(d.tasa_bcv),
@@ -148,157 +186,202 @@ function IngresosInner() {
           }
         return null
       })
-      .then((d) => {
-        if (d) setPreciosCfg(d)
-      })
-      .catch(() => {})
+      .then(d => { if (d) setPreciosCfg(d) })
+      .catch(() => { })
   }, [])
 
-  useEffect(() => {
-    cargarPrecios()
-  }, [cargarPrecios])
-
-  useEffect(() => {
-    if (showForm) cargarPrecios()
-  }, [showForm, cargarPrecios])
-
-  /** Auto total BS empanadas: cant × precio empanada + cant bebidas × precio unitario bebida. */
-  useEffect(() => {
-    if (form.moneda !== 'BS' || form.tipo !== 'desayuno') return
-    if (!preciosCfg) return
-    const n = parseInt(form.cantidad, 10) || 0
-    const sin =
-      !form.bebida || form.bebida === 'sin_bebida'
-    const nBeb = sin ? 0 : parseInt(form.cantidad_bebida, 10) || 0
-    const precioUni =
-      preciosCfg.productos_catalog.find((p) => p.id === form.bebida)?.price
-      ?? preciosCfg.precios_bebidas[form.bebida]
-      ?? 0
-    const tot =
-      n * preciosCfg.empanada_bs + nBeb * precioUni
-    const next = tot.toFixed(2)
-    setForm((f) => (f.monto === next ? f : { ...f, monto: next }))
-  }, [
-    preciosCfg,
-    form.moneda,
-    form.tipo,
-    form.cantidad,
-    form.bebida,
-    form.cantidad_bebida,
-  ])
+  useEffect(() => { cargarPrecios() }, [cargarPrecios])
+  useEffect(() => { if (showForm) cargarPrecios() }, [showForm, cargarPrecios])
 
   useEffect(() => {
     if (searchParams.get('nuevo') === '1') { setShowForm(true); router.replace('/ingresos') }
   }, [searchParams, router])
 
+  // ── Form helpers ─────────────────────────────────────────────────────────────
+
+  const closeForm = () => { setShowForm(false); setEditing(null); setCart(emptyCart()) }
+
   const openEdit = (i: Ingreso) => {
     setEditing(i)
-    const beb =
-      typeof i.bebida === 'string' ? i.bebida : ''
-    const tieneBebida = Boolean(beb) && beb !== 'sin_bebida'
-    const nb =
-      typeof i.cantidad_bebida === 'number' &&
-      Number(i.cantidad_bebida) > 0
-        ? Number(i.cantidad_bebida)
-        : tieneBebida
-          ? 1
-          : 0
-    setForm({
+    const beb = typeof i.bebida === 'string' ? i.bebida : ''
+    const isUsd = (i.moneda ?? 'BS') === 'USD'
+    setCart({
       fecha: (i.fecha ?? '').slice(0, 10),
-      tipo: i.tipo,
-      bebida: beb,
-      cantidad: String(i.cantidad),
-      cantidad_bebida: String(nb),
-      monto:
-        (i.moneda ?? 'BS') === 'USD'
-          ? String(i.monto_usd ?? i.monto)
-          : String(i.monto),
-      moneda: (i.moneda ?? 'BS') as 'BS' | 'USD',
+      empanadas: i.tipo === 'desayuno' ? i.cantidad : 0,
+      almuerzo: i.tipo === 'almuerzo' ? i.cantidad : 0,
+      almuerzoMonto: i.tipo === 'almuerzo' ? String(i.monto) : '',
+      bebidas: (i.tipo === 'bebida' && beb) ? { [beb]: i.cantidad } : {},
+      moneda: isUsd ? 'USD' : 'BS',
       tasa: i.tasa != null && Number(i.tasa) > 0 ? String(i.tasa) : '',
+      montoUsd: isUsd ? String(i.monto_usd ?? i.monto) : '',
       forma_pago: i.forma_pago,
       notas: i.notas ?? '',
     })
     setShowForm(true)
   }
 
-  const closeForm = () => { setShowForm(false); setEditing(null); resetForm() }
-  const resetForm = () =>
-    setForm({
-      fecha: hoy(),
-      tipo: 'desayuno',
-      bebida: '',
-      cantidad: '1',
-      cantidad_bebida: '0',
-      monto: '',
-      moneda: 'BS',
-      tasa: '',
-      forma_pago: 'efectivo',
-      notas: '',
-    })
+  // ── Submit ───────────────────────────────────────────────────────────────────
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.monto || String(form.monto).trim() === '') {
-      show('Indicá el monto del ingreso', 'error')
-      return
+
+    // ── USD mode: single record ──
+    if (cart.moneda === 'USD') {
+      const montoUsd = parseDecimalInput(cart.montoUsd)
+      const tasa     = parseDecimalInput(cart.tasa)
+      if (!montoUsd || montoUsd <= 0) { show('Indicá el monto en USD', 'error'); return }
+      if (!tasa || tasa <= 0)          { show('Indicá la tasa Bs/USD', 'error'); return }
+      const res = await fetch('/api/ingresos', {
+        method: editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editing?.id ?? generateId(),
+          fecha: cart.fecha,
+          tipo: 'desayuno',
+          bebida: '',
+          cantidad: 1,
+          cantidad_bebida: 0,
+          monto: montoUsd * tasa,
+          moneda: 'USD',
+          tasa,
+          monto_usd: montoUsd,
+          forma_pago: 'efectivo',
+          notas: cart.notas,
+        }),
+      })
+      if (!res.ok) { const j = await res.json().catch(() => ({})); show((j as any).error ?? 'Error al guardar', 'error'); return }
+      show(editing ? 'Ingreso actualizado ✓' : 'Ingreso registrado ✓')
+      closeForm(); load(); return
     }
-    const montoVal = parseDecimalInput(form.monto)
-    if (!Number.isFinite(montoVal) || montoVal <= 0) {
-      show('Monto no válido (podés usar coma o punto para decimales)', 'error')
-      return
+
+    // ── BS mode ──
+    if (!hasItems) { show('Seleccioná al menos un producto', 'error'); return }
+
+    if (cart.almuerzo > 0) {
+      const am = parseDecimalInput(cart.almuerzoMonto)
+      if (!am || am <= 0) { show('Indicá el precio del almuerzo', 'error'); return }
     }
-    if (form.moneda === 'USD') {
-      const t = parseDecimalInput(form.tasa)
-      if (!Number.isFinite(t) || t <= 0) {
-        show('Indicá la tasa (Bs por 1 USD)', 'error')
-        return
+
+    if (editing) {
+      // Edit: update only the record being edited
+      let tipo = editing.tipo
+      let bebida = editing.bebida ?? ''
+      let cantidad = 1
+      let cantidad_bebida = 0
+      let monto = 0
+
+      if (tipo === 'desayuno') {
+        cantidad = cart.empanadas || 1
+        monto    = cantidad * (preciosCfg?.empanada_bs ?? 0)
+      } else if (tipo === 'almuerzo') {
+        cantidad = cart.almuerzo || 1
+        monto    = parseDecimalInput(cart.almuerzoMonto) || 0
+      } else {
+        const qty = cart.bebidas[bebida] ?? 0
+        const prod = preciosCfg?.productos_catalog.find(p => p.id === bebida)
+        cantidad       = qty || 1
+        cantidad_bebida = cantidad
+        monto          = cantidad * (prod?.price ?? 0)
       }
+
+      const res = await fetch('/api/ingresos', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editing.id,
+          fecha: cart.fecha,
+          tipo,
+          bebida,
+          cantidad,
+          cantidad_bebida,
+          monto,
+          moneda: 'BS',
+          forma_pago: cart.forma_pago,
+          notas: cart.notas,
+        }),
+      })
+      if (!res.ok) { const j = await res.json().catch(() => ({})); show((j as any).error ?? 'Error', 'error'); return }
+      show('Ingreso actualizado ✓')
+      closeForm(); load(); return
     }
-    const id = editing?.id ?? generateId()
-    const base = {
-      fecha: form.fecha,
-      tipo: form.tipo,
-      bebida: form.bebida,
-      cantidad: parseInt(form.cantidad, 10),
-      cantidad_bebida: parseInt(form.cantidad_bebida, 10) || 0,
-      monto: montoVal,
-      moneda: form.moneda,
-      tasa: form.moneda === 'USD' ? parseDecimalInput(form.tasa) : undefined,
-      monto_usd:
-        form.moneda === 'USD' ? montoVal : undefined,
-      forma_pago: form.moneda === 'USD' ? 'efectivo' : form.forma_pago,
-      notas: form.notas,
+
+    // New: create one record per item type
+    const records: object[] = []
+
+    if (cart.empanadas > 0) {
+      records.push({
+        id: generateId(),
+        fecha: cart.fecha,
+        tipo: 'desayuno',
+        bebida: '',
+        cantidad: cart.empanadas,
+        cantidad_bebida: 0,
+        monto: cart.empanadas * (preciosCfg?.empanada_bs ?? 0),
+        moneda: 'BS',
+        forma_pago: cart.forma_pago,
+        notas: cart.notas,
+      })
     }
-    const payload = { id, ...base }
-    const res = await fetch('/api/ingresos', {
-      method: editing ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}))
-      show((j as { error?: string }).error ?? 'No se pudo guardar', 'error')
-      return
+
+    if (cart.almuerzo > 0) {
+      records.push({
+        id: generateId(),
+        fecha: cart.fecha,
+        tipo: 'almuerzo',
+        bebida: '',
+        cantidad: cart.almuerzo,
+        cantidad_bebida: 0,
+        monto: parseDecimalInput(cart.almuerzoMonto) || 0,
+        moneda: 'BS',
+        forma_pago: cart.forma_pago,
+        notas: cart.notas,
+      })
     }
-    show(editing ? 'Ingreso actualizado ✓' : 'Ingreso registrado ✓')
-    closeForm()
-    load()
+
+    for (const [prodId, qty] of Object.entries(cart.bebidas)) {
+      if (qty <= 0) continue
+      const prod = preciosCfg?.productos_catalog.find(p => p.id === prodId)
+      records.push({
+        id: generateId(),
+        fecha: cart.fecha,
+        tipo: 'bebida',
+        bebida: prodId,
+        cantidad: qty,
+        cantidad_bebida: qty,
+        monto: qty * (prod?.price ?? 0),
+        moneda: 'BS',
+        forma_pago: cart.forma_pago,
+        notas: cart.notas,
+      })
+    }
+
+    const results = await Promise.all(
+      records.map(r => fetch('/api/ingresos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(r),
+      }))
+    )
+    if (results.some(r => !r.ok)) { show('Error al guardar algún registro', 'error'); return }
+
+    show(records.length === 1 ? 'Ingreso registrado ✓' : `${records.length} registros guardados ✓`)
+    closeForm(); load()
   }
 
   const del = async (id: string) => {
-    await fetch('/api/ingresos', { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id }) })
+    await fetch('/api/ingresos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     show('Ingreso eliminado', 'error'); setConfirmId(null); load()
   }
 
-  const total = ingresos.reduce(
-    (s, i) => s + Number(i.monto),
-    0
-  )
+  const total = ingresos.reduce((s, i) => s + Number(i.monto), 0)
+
+  // ── Edit-mode constraints: show only the relevant product section ─────────────
+  const editTipo = editing?.tipo ?? null
 
   return (
     <div className="pb-20">
-      {toast && <Toast message={toast.message} type={toast.type}/>}
-      <ConfirmDialog open={!!confirmId} message="¿Eliminar este ingreso?" onConfirm={() => del(confirmId!)} onCancel={() => setConfirmId(null)}/>
+      {toast && <Toast message={toast.message} type={toast.type} />}
+      <ConfirmDialog open={!!confirmId} message="¿Eliminar este ingreso?" onConfirm={() => del(confirmId!)} onCancel={() => setConfirmId(null)} />
 
       <PageHeader
         title="Ingresos"
@@ -308,16 +391,17 @@ function IngresosInner() {
         right={
           <button onClick={() => setShowForm(true)}
             className="w-10 h-10 rounded-2xl bg-black/15 text-white flex items-center justify-center active:scale-90 transition-transform">
-            <Plus size={20}/>
+            <Plus size={20} />
           </button>
         }
       />
 
+      {/* Filter chips */}
       <div className="px-4 pt-3 pb-1 flex gap-2 overflow-x-auto no-scrollbar">
-        {(['hoy','semana','mes','todo'] as const).map(f => (
+        {(['hoy', 'semana', 'mes', 'todo'] as const).map(f => (
           <button key={f} onClick={() => setFiltro(f)}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all
-              ${filtro===f
+              ${filtro === f
                 ? 'bg-orange-500 text-white shadow-sm'
                 : 'bg-white text-gray-500 border border-gray-200'}`}>
             {f === 'hoy' ? 'Hoy' : f === 'semana' ? 'Esta semana' : f === 'mes' ? 'Este mes' : 'Todo'}
@@ -325,257 +409,220 @@ function IngresosInner() {
         ))}
       </div>
 
+      {/* List */}
       <div className="px-4 space-y-3">
-        {loading ? <LoadingSpinner/> : ingresos.length === 0 ? (
-          <EmptyState icon="🍽️" message="Sin ingresos en este período"/>
-        ) : ingresos.map(i => (
-          <div key={i.id} className="card fade-in-up">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`chip-${i.tipo==='desayuno'?'amber':'orange'}`}>
-                    {i.tipo === 'desayuno' ? '🥟 Empanadas' : '☀️ Almuerzo'}
-                  </span>
-                  <span className="chip-blue">
-                    {(() => {
-                      const { icon, label } = etiquetaFormaIngreso(i.forma_pago)
-                      return (
-                        <>
-                          {icon} {label}
-                        </>
-                      )
-                    })()}
-                  </span>
+        {loading ? <LoadingSpinner /> : ingresos.length === 0 ? (
+          <EmptyState icon="🍽️" message="Sin ingresos en este período" />
+        ) : ingresos.map(i => {
+          const { cls, lbl } = chipTipo(i.tipo)
+          const { icon, label } = etiquetaFormaIngreso(i.forma_pago)
+          return (
+            <div key={i.id} className="card fade-in-up">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className={cls}>{lbl}</span>
+                    <span className="chip-blue">{icon} {label}</span>
+                    {(i.moneda ?? 'BS') === 'USD' && <span className="chip-green">USD</span>}
+                  </div>
+                  <p className="text-xl font-bold text-brand-brown">
+                    {(i.moneda ?? 'BS') === 'USD'
+                      ? formatUSD(Number(i.monto_usd ?? i.monto))
+                      : formatBs(Number(i.monto))}
+                  </p>
                   {(i.moneda ?? 'BS') === 'USD' && (
-                    <span className="chip-green">USD</span>
+                    <p className="text-xs text-gray-500">≈ {formatBs(Number(i.monto))} (tasa {i.tasa})</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {i.tipo === 'bebida'
+                      ? `${i.cantidad} × ${labelBebida(i.bebida ?? '', preciosCfg?.productos_catalog)}`
+                      : `${i.cantidad} ${i.tipo === 'desayuno' ? 'empanada(s)' : 'plato(s)'}`}
+                    {i.tipo === 'desayuno' && i.bebida && i.bebida !== 'sin_bebida' && (
+                      ` · ${labelBebida(i.bebida, preciosCfg?.productos_catalog)} × ${Number(i.cantidad_bebida) > 0 ? i.cantidad_bebida : 1}`
+                    )}
+                    {' · '}{formatoFechaLista(i.fecha)}
+                  </p>
+                  {i.notas && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      {(i.moneda ?? 'BS') === 'BS' && i.forma_pago === 'pago_movil' ? 'Referencia: ' : ''}
+                      {i.notas}
+                    </p>
                   )}
                 </div>
-                <p className="text-xl font-bold text-brand-brown">
-                  {(i.moneda ?? 'BS') === 'USD'
-                    ? formatUSD(Number(i.monto_usd ?? i.monto))
-                    : formatBs(Number(i.monto))}
-                </p>
-                {(i.moneda ?? 'BS') === 'USD' && (
-                  <p className="text-xs text-gray-500">
-                    ≈ {formatBs(Number(i.monto))} (tasa {i.tasa})
-                  </p>
-                )}
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {i.cantidad}{' '}
-                  {i.tipo === 'desayuno' ? 'empanada(s)' : 'plato(s)'}
-                  {(() => {
-                    const b = i.bebida ?? ''
-                    if (!b || b === 'sin_bebida') return ''
-                    const q =
-                      Number(i.cantidad_bebida) > 0
-                        ? Number(i.cantidad_bebida)
-                        : 1
-                    return ` · ${labelBebida(b, preciosCfg?.productos_catalog)} × ${q}`
-                  })()}
-                  {' · '}
-                  {formatoFechaLista(i.fecha)}
-                </p>
-                {i.notas && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    {(i.moneda ?? 'BS') === 'BS' && i.forma_pago === 'pago_movil'
-                      ? 'Referencia: '
-                      : ''}
-                    {i.notas}
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-2 ml-2">
-                <button onClick={() => openEdit(i)} className="p-2 rounded-xl bg-orange-50 active:scale-95">
-                  <Pencil size={15} className="text-brand-orange"/>
-                </button>
-                <button onClick={() => setConfirmId(i.id)} className="p-2 rounded-xl bg-red-50 active:scale-95">
-                  <Trash2 size={15} className="text-red-500"/>
-                </button>
+                <div className="flex gap-2 ml-2">
+                  <button onClick={() => openEdit(i)} className="p-2 rounded-xl bg-orange-50 active:scale-95">
+                    <Pencil size={15} className="text-brand-orange" />
+                  </button>
+                  <button onClick={() => setConfirmId(i.id)} className="p-2 rounded-xl bg-red-50 active:scale-95">
+                    <Trash2 size={15} className="text-red-500" />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
-      {/* Form Modal */}
+      {/* ── Form Modal ── */}
       <Modal open={showForm} onClose={closeForm} title={editing ? 'Editar ingreso' : 'Nuevo ingreso'}>
         <form onSubmit={submit} className="space-y-5 mt-2">
-          <InputField label="Fecha" value={form.fecha} onChange={v=>setForm(f=>({...f,fecha:v}))} type="date" required/>
+
+          <InputField label="Fecha" value={cart.fecha} onChange={v => setCart(c => ({ ...c, fecha: v }))} type="date" required />
+
           <SelectField
             label="Moneda del ingreso"
-            value={form.moneda}
-            onChange={(v) =>
-              setForm((f) => ({
-                ...f,
-                moneda: v as 'BS' | 'USD',
-                forma_pago: v === 'USD' ? 'efectivo' : f.forma_pago,
-                tasa: v === 'BS' ? '' : f.tasa,
-              }))
-            }
+            value={cart.moneda}
+            onChange={v => setCart(c => ({ ...c, moneda: v as 'BS' | 'USD', tasa: v === 'BS' ? '' : c.tasa }))}
             options={MONEDAS}
             required
           />
 
-          {/* Productos */}
-          <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Producto</p>
-            <div className="grid grid-cols-2 gap-3">
-              <ProductCard
-                emoji=""
-                imageSrc="/empanada.png"
-                name="Empanadas"
-                desc="De queso, carne o pollo"
-                price={preciosCfg ? `${formatBs(preciosCfg.empanada_bs)} c/u` : '—'}
-                quantity={form.tipo === 'desayuno' ? parseInt(form.cantidad) || 0 : 0}
-                onAdd={() =>
-                  setForm((f) => ({
-                    ...f,
-                    tipo: 'desayuno',
-                    cantidad: String((f.tipo === 'desayuno' ? parseInt(f.cantidad) || 0 : 0) + 1),
-                    monto: f.tipo !== 'desayuno' ? '' : f.monto,
-                  }))
-                }
-                onRemove={() => {
-                  if (form.tipo !== 'desayuno') return
-                  setForm((f) => ({ ...f, cantidad: String(Math.max(1, (parseInt(f.cantidad) || 1) - 1)) }))
-                }}
-              />
-              <ProductCard
-                emoji="☀️"
-                name="Almuerzo"
-                desc="Plato del día"
-                price="Precio libre"
-                quantity={form.tipo === 'almuerzo' ? parseInt(form.cantidad) || 0 : 0}
-                onAdd={() =>
-                  setForm((f) => ({
-                    ...f,
-                    tipo: 'almuerzo',
-                    cantidad: String((f.tipo === 'almuerzo' ? parseInt(f.cantidad) || 0 : 0) + 1),
-                    monto: f.tipo !== 'almuerzo' ? '' : f.monto,
-                  }))
-                }
-                onRemove={() => {
-                  if (form.tipo !== 'almuerzo') return
-                  setForm((f) => ({ ...f, cantidad: String(Math.max(1, (parseInt(f.cantidad) || 1) - 1)) }))
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Bebidas */}
-          <div>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-              Bebidas <span className="normal-case font-normal">(opcional)</span>
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              {(preciosCfg?.productos_catalog ?? []).map((prod) => {
-                const qty = form.bebida === prod.id ? parseInt(form.cantidad_bebida) || 0 : 0
-                return (
-                  <ProductCard
-                    key={prod.id}
-                    emoji={prod.emoji}
-                    name={prod.name}
-                    desc=""
-                    price={`${formatBs(prod.price)} c/u`}
-                    quantity={qty}
-                    onAdd={() =>
-                      setForm((f) => ({
-                        ...f,
-                        bebida: prod.id,
-                        cantidad_bebida: String((f.bebida === prod.id ? parseInt(f.cantidad_bebida) || 0 : 0) + 1),
-                      }))
-                    }
-                    onRemove={() => {
-                      if (form.bebida !== prod.id) return
-                      const next = Math.max(0, (parseInt(form.cantidad_bebida) || 0) - 1)
-                      setForm((f) => ({
-                        ...f,
-                        bebida: next === 0 ? 'sin_bebida' : prod.id,
-                        cantidad_bebida: String(next),
-                      }))
-                    }}
-                  />
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Montos */}
-          {form.moneda === 'USD' ? (
+          {/* ── USD mode ── */}
+          {cart.moneda === 'USD' && (
             <>
-              <InputField
-                label="Monto (USD, efectivo)"
-                value={form.monto}
-                onChange={(v) => setForm((f) => ({ ...f, monto: v }))}
-                decimal
-                placeholder="0,00"
-                required
-              />
-              <InputField
-                label="Tasa (Bs por 1 USD)"
-                value={form.tasa}
-                onChange={(v) => setForm((f) => ({ ...f, tasa: v }))}
-                decimal
-                placeholder="Ej. 36,50"
-                required
-              />
-            </>
-          ) : (
-            <>
-              {form.tipo === 'desayuno' && (
-                <p className="text-xs text-gray-500">
-                  El monto se calcula con los precios de{' '}
-                  <button
-                    type="button"
-                    className="text-brand-orange font-medium underline"
-                    onClick={() => router.push('/configuracion')}>
-                    Ajustes
-                  </button>
-                  . Podés corregirlo a mano si el cliente paga distinto.
-                </p>
-              )}
-              <InputField
-                label="Monto total (Bs)"
-                value={form.monto}
-                onChange={(v) => setForm((f) => ({ ...f, monto: v }))}
-                decimal
-                placeholder="0,00"
-                required
-              />
-              <SelectField
-                label="Forma de pago"
-                value={form.forma_pago}
-                onChange={(v) => setForm((f) => ({ ...f, forma_pago: v }))}
-                options={FORMAS_PAGO_INGRESO_BS}
-                required
-              />
+              <InputField label="Monto (USD, efectivo)" value={cart.montoUsd} onChange={v => setCart(c => ({ ...c, montoUsd: v }))} decimal placeholder="0,00" required />
+              <InputField label="Tasa (Bs por 1 USD)" value={cart.tasa} onChange={v => setCart(c => ({ ...c, tasa: v }))} decimal placeholder="Ej. 36,50" required />
             </>
           )}
+
+          {/* ── BS mode: products ── */}
+          {cart.moneda === 'BS' && (
+            <>
+              {/* Comidas */}
+              {(!editTipo || editTipo === 'desayuno' || editTipo === 'almuerzo') && (
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Comida</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(!editTipo || editTipo === 'desayuno') && (
+                      <ProductCard
+                        emoji=""
+                        imageSrc="/empanada.png"
+                        name="Empanadas"
+                        desc="De queso, carne o pollo"
+                        price={preciosCfg ? `${formatBs(preciosCfg.empanada_bs)} c/u` : '—'}
+                        quantity={cart.empanadas}
+                        onAdd={() => setCart(c => ({ ...c, empanadas: c.empanadas + 1 }))}
+                        onRemove={() => setCart(c => ({ ...c, empanadas: Math.max(0, c.empanadas - 1) }))}
+                      />
+                    )}
+                    {(!editTipo || editTipo === 'almuerzo') && (
+                      <ProductCard
+                        emoji="☀️"
+                        name="Almuerzo"
+                        desc="Plato del día"
+                        price="Precio libre"
+                        quantity={cart.almuerzo}
+                        onAdd={() => setCart(c => ({ ...c, almuerzo: c.almuerzo + 1 }))}
+                        onRemove={() => setCart(c => ({ ...c, almuerzo: Math.max(0, c.almuerzo - 1) }))}
+                      />
+                    )}
+                  </div>
+
+                  {/* Almuerzo price input */}
+                  {cart.almuerzo > 0 && (
+                    <div className="mt-3">
+                      <InputField
+                        label={`Precio almuerzo × ${cart.almuerzo} (Bs)`}
+                        value={cart.almuerzoMonto}
+                        onChange={v => setCart(c => ({ ...c, almuerzoMonto: v }))}
+                        decimal
+                        placeholder="0,00"
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Bebidas */}
+              {(!editTipo || editTipo === 'bebida') && (preciosCfg?.productos_catalog ?? []).length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                    Bebidas <span className="normal-case font-normal">(opcional)</span>
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(preciosCfg?.productos_catalog ?? [])
+                      // in edit mode for a bebida, only show that specific bebida
+                      .filter(prod => !editTipo || !editing?.bebida || prod.id === editing.bebida)
+                      .map(prod => {
+                        const qty = cart.bebidas[prod.id] ?? 0
+                        return (
+                          <ProductCard
+                            key={prod.id}
+                            emoji={prod.emoji}
+                            name={prod.name}
+                            desc=""
+                            price={`${formatBs(prod.price)} c/u`}
+                            quantity={qty}
+                            onAdd={() => setCart(c => ({
+                              ...c,
+                              bebidas: { ...c.bebidas, [prod.id]: (c.bebidas[prod.id] ?? 0) + 1 },
+                            }))}
+                            onRemove={() => setCart(c => {
+                              const next = Math.max(0, (c.bebidas[prod.id] ?? 0) - 1)
+                              const beb = { ...c.bebidas }
+                              if (next === 0) delete beb[prod.id]
+                              else beb[prod.id] = next
+                              return { ...c, bebidas: beb }
+                            })}
+                          />
+                        )
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* Running total */}
+              {hasItems && (
+                <div className={`rounded-2xl p-4 ${autoTotalBs > 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-gray-50 border border-gray-200'}`}>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Total a cobrar</p>
+                  <p className={`text-2xl font-black tabular-nums ${autoTotalBs > 0 ? 'text-emerald-700' : 'text-gray-400'}`}>
+                    {autoTotalBs > 0 ? formatBs(autoTotalBs) : cart.almuerzo > 0 ? 'Ingresá precio almuerzo ↑' : '—'}
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {[
+                      cart.empanadas > 0 && `${cart.empanadas} empanada${cart.empanadas > 1 ? 's' : ''}`,
+                      cart.almuerzo  > 0 && `${cart.almuerzo} almuerzo${cart.almuerzo > 1 ? 's' : ''}`,
+                      ...Object.entries(cart.bebidas)
+                        .filter(([, q]) => q > 0)
+                        .map(([id, q]) => `${q} ${labelBebida(id, preciosCfg?.productos_catalog)}`),
+                    ].filter(Boolean).join(' + ')}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Payment + notes (common) */}
+          {cart.moneda === 'BS' && (
+            <SelectField
+              label="Forma de pago"
+              value={cart.forma_pago}
+              onChange={v => setCart(c => ({ ...c, forma_pago: v }))}
+              options={FORMAS_PAGO_INGRESO_BS}
+              required
+            />
+          )}
           <InputField
-            label={
-              form.moneda === 'BS' && form.forma_pago === 'pago_movil'
-                ? 'Referencia (opcional)'
-                : 'Notas (opcional)'
-            }
-            value={form.notas}
-            onChange={v => setForm(f => ({ ...f, notas: v }))}
-            placeholder={
-              form.moneda === 'BS' && form.forma_pago === 'pago_movil'
-                ? 'Ej. últimos dígitos del pago, teléfono...'
-                : 'Observaciones...'
-            }
+            label={cart.moneda === 'BS' && cart.forma_pago === 'pago_movil' ? 'Referencia (opcional)' : 'Notas (opcional)'}
+            value={cart.notas}
+            onChange={v => setCart(c => ({ ...c, notas: v }))}
+            placeholder={cart.moneda === 'BS' && cart.forma_pago === 'pago_movil'
+              ? 'Ej. últimos dígitos del pago, teléfono...'
+              : 'Observaciones...'}
           />
+
           <button type="submit" className="btn-primary mt-2">
             {editing ? '✓ Actualizar ingreso' : '+ Registrar ingreso'}
           </button>
         </form>
       </Modal>
 
-      <BottomNav/>
+      <BottomNav />
     </div>
   )
 }
 
 export default function IngresosPage() {
-  return <Suspense><IngresosInner/></Suspense>
+  return <Suspense><IngresosInner /></Suspense>
 }

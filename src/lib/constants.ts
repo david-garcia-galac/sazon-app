@@ -27,7 +27,7 @@ export const BEBIDAS = [
 export const FORMAS_PAGO_INGRESO_BS = [
   { value: 'efectivo',       label: '💵 Efectivo (Bs)' },
   { value: 'pago_movil',    label: '📱 Pago Móvil' },
-  { value: 'transferencia', label: '🏦 Transferencia' },
+  { value: 'transferencia', label: '💳 Punto de Venta' },
 ]
 
 /** Compat: todos los métodos BS (uso en listados/filtros) */

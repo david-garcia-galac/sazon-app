@@ -1,6 +1,5 @@
 'use client'
 
-import type { ReactNode } from 'react'
 import { formatBs, formatUSD, hoy as hoyFn } from '@/lib/constants'
 
 export type PeriodoDetalleIngresos = {
@@ -26,323 +25,252 @@ export type DiaAgg = {
   saldo: number
 }
 
-type IngresoTab = 'bs' | 'usd' | 'conc'
+// ── Donut chart ───────────────────────────────────────────────────────────────
 
-type BarItem = {
+interface DonutSegment {
+  value: number
+  color: string
+  gradId: string
   label: string
-  short: string
-  raw: number
   display: string
-  tone: string
-  fill: string
 }
 
-function fmtDiaTitulo(iso: string): string {
-  const [y, m, day] = iso.split('-').map(Number)
-  if (!y || !m || !day) return iso
-  const d = new Date(y, m - 1, day)
-  return d.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'short' })
+function polarXY(cx: number, cy: number, r: number, a: number) {
+  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }
 }
 
-function Bars({ items, footnote }: { items: BarItem[]; footnote: ReactNode }) {
-  const allZero = items.every(i => i.raw === 0)
-  const max = Math.max(...items.map(i => i.raw), 1e-6)
-  const W = 320
-  const H = 124
-  const padL = 6
-  const padR = 6
-  const padT = 8
-  const padB = 36
-  const innerW = W - padL - padR
-  const innerH = H - padT - padB
-  const n = items.length
-  const gap = 6
-  const barW = (innerW - gap * (n - 1)) / n
+function arcPath(cx: number, cy: number, R: number, ri: number, a0: number, a1: number) {
+  const s  = polarXY(cx, cy, R,  a0)
+  const e  = polarXY(cx, cy, R,  a1)
+  const si = polarXY(cx, cy, ri, a0)
+  const ei = polarXY(cx, cy, ri, a1)
+  const lg = a1 - a0 > Math.PI ? 1 : 0
+  return `M ${s.x} ${s.y} A ${R} ${R} 0 ${lg} 1 ${e.x} ${e.y} L ${ei.x} ${ei.y} A ${ri} ${ri} 0 ${lg} 0 ${si.x} ${si.y} Z`
+}
 
-  if (allZero) {
-    return (
-      <div className="rounded-2xl border border-orange-100 bg-gradient-to-b from-white to-orange-50/40 p-6 shadow-sm flex flex-col items-center gap-2 text-center">
-        <p className="text-3xl">📭</p>
-        <p className="text-sm font-semibold text-gray-500">Sin registros para esta fecha</p>
-        <p className="text-xs text-gray-400">Registrá un ingreso o seleccioná otro día</p>
-      </div>
-    )
-  }
+function DonutChart({ segments, center }: { segments: DonutSegment[]; center: string }) {
+  const total = segments.reduce((s, g) => s + g.value, 0)
+  const cx = 90, cy = 90, R = 78, ri = 50
+  let angle = -Math.PI / 2
+
+  const slices = segments
+    .filter(s => s.value > 0)
+    .map(s => {
+      const span = total > 0 ? (s.value / total) * 2 * Math.PI : 0
+      // avoid SVG full-circle degenerate path
+      const clamp = span >= 2 * Math.PI - 0.001 ? 2 * Math.PI - 0.002 : span
+      const path = { d: arcPath(cx, cy, R, ri, angle, angle + clamp), seg: s }
+      angle += span
+      return path
+    })
 
   return (
-    <div className="rounded-2xl border border-orange-100 bg-gradient-to-b from-white to-orange-50/40 p-3 shadow-sm">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="w-full h-auto max-h-40"
-        role="img"
-        aria-label="Resumen del día en barras"
-      >
-        {items.map((it, i) => {
-          const x = padL + i * (barW + gap)
-          const h = innerH * (it.raw / max)
-          const y = padT + innerH - h
-          const shortLbl = it.display.length > 12 ? `${it.display.slice(0, 11)}…` : it.display
-          return (
-            <g key={it.short}>
-              <rect
-                x={x}
-                y={y}
-                width={barW}
-                height={Math.max(h, 0)}
-                rx={6}
-                className={it.fill}
-              />
-              <text
-                x={x + barW / 2}
-                y={H - 10}
-                textAnchor="middle"
-                className="fill-gray-600"
-                style={{ fontSize: '9px', fontWeight: 600 }}
-              >
-                {it.short}
-              </text>
-              {it.raw > 0 && h > 14 && (
-                <text
-                  x={x + barW / 2}
-                  y={y + h / 2 + 3}
-                  textAnchor="middle"
-                  className="fill-white"
-                  style={{ fontSize: '7.5px', fontWeight: 700 }}
-                >
-                  {shortLbl}
-                </text>
-              )}
-            </g>
-          )
-        })}
-      </svg>
-      <ul className="mt-2 space-y-1.5 text-xs border-t border-orange-100/80 pt-2">
-        {items.map(it => (
-          <li key={it.short} className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-2 min-w-0 text-gray-600">
-              <span className={`w-2 h-2 rounded-sm flex-shrink-0 ${it.tone}`} />
-              <span className="truncate">{it.label}</span>
-            </span>
-            <span className="font-semibold text-brand-brown whitespace-nowrap tabular-nums">
-              {it.display}
-            </span>
-          </li>
+    <svg viewBox="0 0 180 180" className="w-44 h-44 flex-shrink-0 drop-shadow-md">
+      <defs>
+        {segments.map(s => (
+          <radialGradient key={s.gradId} id={s.gradId} cx="35%" cy="35%" r="65%">
+            <stop offset="0%"   stopColor={s.color} stopOpacity="0.9" />
+            <stop offset="100%" stopColor={s.color} stopOpacity="1"   />
+          </radialGradient>
         ))}
-      </ul>
-      <div className="mt-3 text-xs text-gray-500">{footnote}</div>
-    </div>
+        <filter id="donut-shadow">
+          <feDropShadow dx="0" dy="4" stdDeviation="5" floodOpacity="0.18" />
+        </filter>
+      </defs>
+
+      {total === 0 ? (
+        <circle cx={cx} cy={cy} r={R} fill="#F3F4F6" />
+      ) : (
+        <g filter="url(#donut-shadow)">
+          {slices.map(({ d, seg }) => (
+            <path key={seg.gradId} d={d} fill={`url(#${seg.gradId})`} />
+          ))}
+        </g>
+      )}
+
+      {/* Hole */}
+      <circle cx={cx} cy={cy} r={ri - 1} fill="white" />
+
+      {/* Center label */}
+      <text
+        x={cx} y={cy - 5}
+        textAnchor="middle"
+        fill="#1F2937"
+        style={{ fontSize: '10.5px', fontWeight: 800 }}
+      >
+        {center}
+      </text>
+      <text
+        x={cx} y={cy + 10}
+        textAnchor="middle"
+        fill="#9CA3AF"
+        style={{ fontSize: '8px' }}
+      >
+        total Bs
+      </text>
+    </svg>
   )
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtDia(iso: string): string {
+  const [y, m, day] = iso.split('-').map(Number)
+  if (!y || !m || !day) return iso
+  return new Date(y, m - 1, day).toLocaleDateString('es', {
+    weekday: 'long', day: 'numeric', month: 'short',
+  })
+}
+
+function shortBs(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.', ',') + ' M Bs'
+  if (n >= 1_000)     return (n / 1_000).toFixed(1).replace('.', ',') + ' k Bs'
+  return formatBs(n)
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export function DashboardDiaResumen({
   fechaValue,
   onFechaChange,
-  ingTab,
   detalle,
   agg,
 }: {
   fechaValue: string
   onFechaChange: (iso: string) => void
-  ingTab: IngresoTab
   detalle: PeriodoDetalleIngresos
   agg: DiaAgg
 }) {
-  const cap = hoyFn()
-  const esHoy = fechaValue === cap
-  const d = detalle
+  const cap    = hoyFn()
+  const esHoy  = fechaValue === cap
+  const d      = detalle
+  const pos    = agg.saldo >= 0
 
-  let chartBody: React.ReactNode
-  let lineaVentasSaldo: React.ReactNode
+  const segments: DonutSegment[] = [
+    {
+      value: d.bs.efectivo,
+      color: '#F59E0B',
+      gradId: 'grad-efect',
+      label: 'Efectivo',
+      display: formatBs(d.bs.efectivo),
+    },
+    {
+      value: d.bs.pago_movil,
+      color: '#F97316',
+      gradId: 'grad-movil',
+      label: 'Pago Móvil',
+      display: formatBs(d.bs.pago_movil),
+    },
+    {
+      value: d.bs.transferencia,
+      color: '#6366F1',
+      gradId: 'grad-pdv',
+      label: 'Punto de Venta',
+      display: formatBs(d.bs.transferencia),
+    },
+  ]
 
-  if (ingTab === 'bs') {
-    lineaVentasSaldo = (
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700">
-        <span>
-          <strong className="text-brand-brown">Ventas (Bs)</strong>{' '}
-          <span className="tabular-nums font-semibold">{d.bs.ventas}</span>
-        </span>
-        {(d.usd.ventas > 0 || d.usd.totalUsd > 0) && (
-          <span>
-            <strong className="text-emerald-700">USD efectivo</strong>{' '}
-            <span className="tabular-nums font-semibold">{formatUSD(d.usd.totalUsd)}</span>
-            <span className="text-gray-500"> ({d.usd.ventas} venta{d.usd.ventas === 1 ? '' : 's'})</span>
-          </span>
-        )}
-        <span>
-          <strong className="text-green-700">Bolívares cobrados (Bs)</strong>{' '}
-          <span className="tabular-nums">{formatBs(d.bs.total)}</span>
-        </span>
-        <span>
-          <strong className={agg.saldo >= 0 ? 'text-green-700' : 'text-red-700'}>Saldo</strong>{' '}
-          <span className="tabular-nums">{formatBs(agg.saldo)}</span>
-        </span>
-      </div>
-    )
-    chartBody = (
-      <Bars
-        items={[
-          {
-            label: 'Efectivo Bs',
-            short: 'Efect.',
-            raw: d.bs.efectivo,
-            display: formatBs(d.bs.efectivo),
-            tone: 'bg-amber-400',
-            fill: 'fill-amber-400',
-          },
-          {
-            label: 'Pago móvil',
-            short: 'P.móv.',
-            raw: d.bs.pago_movil,
-            display: formatBs(d.bs.pago_movil),
-            tone: 'bg-orange-500',
-            fill: 'fill-orange-500',
-          },
-          {
-            label: 'Transferencia',
-            short: 'Transf.',
-            raw: d.bs.transferencia,
-            display: formatBs(d.bs.transferencia),
-            tone: 'bg-amber-800',
-            fill: 'fill-amber-800',
-          },
-          {
-            label: 'USD efectivo (equiv. Bs)',
-            short: '$→Bs',
-            raw: d.usd.equivBs,
-            display: formatBs(d.usd.equivBs),
-            tone: 'bg-emerald-500',
-            fill: 'fill-emerald-600',
-          },
-          {
-            label: 'Egresos (Bs)',
-            short: 'Egres.',
-            raw: agg.egresos,
-            display: formatBs(agg.egresos),
-            tone: 'bg-red-400',
-            fill: 'fill-red-400',
-          },
-        ]}
-        footnote={<p>Ingresos: bolívares por forma de pago, equivalente del efectivo USD y egresos del día.</p>}
-      />
-    )
-  } else if (ingTab === 'usd') {
-    lineaVentasSaldo = (
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700">
-        <span>
-          <strong className="text-emerald-700">Efectivo USD</strong>{' '}
-          <span className="tabular-nums font-semibold">{formatUSD(d.usd.totalUsd)}</span>
-        </span>
-        <span>
-          <strong className="text-brand-brown">Ventas USD</strong>{' '}
-          <span className="tabular-nums font-semibold">{d.usd.ventas}</span>
-        </span>
-        <span>
-          <strong className="text-green-700">Saldo (Bs equiv.)</strong>{' '}
-          <span className="tabular-nums">{formatBs(agg.saldo)}</span>
-        </span>
-      </div>
-    )
-    chartBody = (
-      <Bars
-        items={[
-          {
-            label: 'Equiv. registrado en Bs',
-            short: 'Equiv.Bs',
-            raw: d.usd.equivBs,
-            display: formatBs(d.usd.equivBs),
-            tone: 'bg-orange-500',
-            fill: 'fill-orange-500',
-          },
-          {
-            label: 'Egresos (Bs)',
-            short: 'Egres.',
-            raw: agg.egresos,
-            display: formatBs(agg.egresos),
-            tone: 'bg-red-400',
-            fill: 'fill-red-400',
-          },
-        ]}
-        footnote={<p>Barras en bolívares: equivalente registrado por ventas USD y egresos. El total USD figura arriba.</p>}
-      />
-    )
-  } else {
-    lineaVentasSaldo = (
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700">
-        <span>
-          <strong className="text-brand-brown">Movimientos</strong>{' '}
-          <span className="tabular-nums font-semibold">{d.conciliacion.ventasTotal}</span>
-        </span>
-        <span>
-          <strong className="text-green-900">USD efectivo</strong>{' '}
-          <span className="tabular-nums">{formatUSD(d.conciliacion.totalDivisaUsd)}</span>
-        </span>
-        <span>
-          <strong className={agg.saldo >= 0 ? 'text-green-700' : 'text-red-700'}>Saldo (Bs equiv.)</strong>{' '}
-          <span className="tabular-nums">{formatBs(agg.saldo)}</span>
-        </span>
-      </div>
-    )
-    chartBody = (
-      <Bars
-        items={[
-          {
-            label: 'Ingresos en bolívares',
-            short: 'Bs cobr.',
-            raw: d.conciliacion.ingresosBolivares,
-            display: formatBs(d.conciliacion.ingresosBolivares),
-            tone: 'bg-amber-400',
-            fill: 'fill-amber-500',
-          },
-          {
-            label: 'Dólares en Bs (equiv.)',
-            short: '$→Bs',
-            raw: d.conciliacion.bolivaresEquivUsd,
-            display: formatBs(d.conciliacion.bolivaresEquivUsd),
-            tone: 'bg-orange-500',
-            fill: 'fill-orange-500',
-          },
-          {
-            label: 'Total unificado (Bs)',
-            short: 'Total',
-            raw: d.conciliacion.totalBolivares,
-            display: formatBs(d.conciliacion.totalBolivares),
-            tone: 'bg-green-600',
-            fill: 'fill-green-600',
-          },
-          {
-            label: 'Egresos (Bs)',
-            short: 'Egres.',
-            raw: agg.egresos,
-            display: formatBs(agg.egresos),
-            tone: 'bg-red-400',
-            fill: 'fill-red-400',
-          },
-        ]}
-        footnote={<p>Conciliación del día: bolívares cobrados, equivalente USD en Bs y total frente a egresos.</p>}
-      />
-    )
-  }
+  const hayDatos = d.bs.total > 0 || d.usd.totalUsd > 0
 
   return (
-    <section>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <h2 className="section-title mb-0">
-          📅 {esHoy ? 'Hoy' : 'Día'} — <span className="capitalize font-semibold">{fmtDiaTitulo(fechaValue)}</span>
+    <section className="space-y-3">
+
+      {/* Date row */}
+      <div className="flex items-center justify-between">
+        <h2 className="section-title mb-0 capitalize">
+          {esHoy ? '📅 Hoy' : `📅 ${fmtDia(fechaValue)}`}
         </h2>
-        <label className="flex flex-col gap-0.5 text-xs text-gray-600 shrink-0">
-          <span className="font-medium text-brand-brown">Fecha</span>
+        <label className="flex flex-col items-end gap-0.5 shrink-0">
+          <span className="text-[10px] font-medium text-brand-brown">Fecha</span>
           <input
             type="date"
             max={cap}
             value={fechaValue}
             onChange={e => onFechaChange(e.target.value)}
-            className="rounded-xl border-2 border-orange-200 px-2 py-1.5 text-sm text-brand-brown bg-white shadow-sm"
+            className="rounded-xl border-2 border-orange-200 px-2 py-1 text-xs text-brand-brown bg-white shadow-sm"
           />
         </label>
       </div>
 
-      <div className="mt-3">{chartBody}</div>
-      {lineaVentasSaldo}
+      {/* ── Hero saldo ── */}
+      <div
+        className={`rounded-2xl p-5 shadow-lg ${
+          pos
+            ? 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-green-600'
+            : 'bg-gradient-to-br from-red-400 via-rose-500 to-red-600'
+        }`}
+      >
+        <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1.5">
+          Saldo del día
+        </p>
+        <p className="text-white font-black leading-none tabular-nums"
+           style={{ fontSize: 'clamp(1.9rem, 8vw, 2.6rem)' }}>
+          {formatBs(agg.saldo)}
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="bg-white/15 rounded-xl px-3 py-2">
+            <p className="text-white/60 text-[9px] uppercase tracking-wide font-semibold">Ingresos</p>
+            <p className="text-white font-bold text-sm tabular-nums">{shortBs(d.bs.total)}</p>
+          </div>
+          <div className="bg-white/15 rounded-xl px-3 py-2">
+            <p className="text-white/60 text-[9px] uppercase tracking-wide font-semibold">Egresos</p>
+            <p className="text-white font-bold text-sm tabular-nums">{shortBs(agg.egresos)}</p>
+          </div>
+        </div>
+      </div>
+
+      {!hayDatos && (
+        <div className="rounded-2xl border border-orange-100 bg-gradient-to-b from-white to-orange-50/40 p-6 shadow-sm flex flex-col items-center gap-2 text-center">
+          <p className="text-3xl">📭</p>
+          <p className="text-sm font-semibold text-gray-500">Sin registros para esta fecha</p>
+          <p className="text-xs text-gray-400">Registrá un ingreso o seleccioná otro día</p>
+        </div>
+      )}
+
+      {/* ── Bs donut ── */}
+      {d.bs.total > 0 && (
+        <div className="card p-4">
+          <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wide mb-3">
+            Cobros en Bolívares · {d.bs.ventas} venta{d.bs.ventas !== 1 ? 's' : ''}
+          </p>
+          <div className="flex items-center gap-4">
+            <DonutChart
+              segments={segments}
+              center={shortBs(d.bs.total).replace(' Bs', '')}
+            />
+            <div className="flex-1 space-y-3 min-w-0">
+              {segments.map(seg => (
+                <div key={seg.gradId} className="flex items-center gap-2.5">
+                  <span
+                    className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm"
+                    style={{ backgroundColor: seg.color }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-gray-700 leading-tight">{seg.label}</p>
+                    <p className="text-[10px] text-gray-400 tabular-nums truncate">{seg.display}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── USD card ── */}
+      {d.usd.totalUsd > 0 && (
+        <div className="card p-4 border-l-4 border-emerald-400">
+          <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wide mb-2">
+            Efectivo en Dólares
+          </p>
+          <p className="text-3xl font-black text-emerald-600 tabular-nums leading-none">
+            {formatUSD(d.usd.totalUsd)}
+          </p>
+          <div className="mt-2 flex gap-3 text-xs text-gray-500">
+            <span>≈ {formatBs(d.usd.equivBs)}</span>
+            <span>· {d.usd.ventas} venta{d.usd.ventas !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

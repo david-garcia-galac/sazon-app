@@ -51,7 +51,7 @@ interface SazonDB extends DBSchema {
 export interface Ingreso {
   id: string
   fecha: string
-  tipo: 'desayuno' | 'almuerzo'
+  tipo: 'desayuno' | 'almuerzo' | 'bebida'
   bebida?: string
   cantidad: number
   cantidad_bebida?: number
