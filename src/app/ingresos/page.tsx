@@ -69,9 +69,10 @@ function ProductCard({ emoji, imageSrc, name, desc, price, quantity, onAdd, onRe
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function etiquetaFormaIngreso(fp: string): { icon: string; label: string } {
+function etiquetaFormaIngreso(fp: string, moneda?: string): { icon: string; label: string } {
+  if (fp === 'divisa' || moneda === 'USD') return { icon: '🟢', label: 'Divisa USD' }
   switch (fp) {
-    case 'pago_movil':   return { icon: '📱', label: 'Pago móvil' }
+    case 'pago_movil':    return { icon: '📱', label: 'Pago móvil' }
     case 'transferencia': return { icon: '💳', label: 'Punto de Venta' }
     default:              return { icon: '💵', label: 'Efectivo' }
   }
@@ -203,18 +204,20 @@ function IngresosInner() {
 
   const openEdit = (i: Ingreso) => {
     setEditing(i)
-    const beb = typeof i.bebida === 'string' ? i.bebida : ''
-    const isUsd = (i.moneda ?? 'BS') === 'USD'
+    const beb      = typeof i.bebida === 'string' ? i.bebida : ''
+    const isDivisa = i.forma_pago === 'divisa' || ((i.moneda ?? 'BS') === 'USD' && i.forma_pago !== 'efectivo')
+    // legacy USD records (forma_pago='efectivo', moneda='USD') use the simple USD mode
+    const isLegacyUsd = (i.moneda ?? 'BS') === 'USD' && !isDivisa
     setCart({
       fecha: (i.fecha ?? '').slice(0, 10),
       empanadas: i.tipo === 'desayuno' ? i.cantidad : 0,
-      almuerzo: i.tipo === 'almuerzo' ? i.cantidad : 0,
+      almuerzo:  i.tipo === 'almuerzo' ? i.cantidad : 0,
       almuerzoMonto: i.tipo === 'almuerzo' ? String(i.monto) : '',
       bebidas: (i.tipo === 'bebida' && beb) ? { [beb]: i.cantidad } : {},
-      moneda: isUsd ? 'USD' : 'BS',
-      tasa: i.tasa != null && Number(i.tasa) > 0 ? String(i.tasa) : '',
-      montoUsd: isUsd ? String(i.monto_usd ?? i.monto) : '',
-      forma_pago: i.forma_pago,
+      moneda: isLegacyUsd ? 'USD' : 'BS',
+      tasa: (isDivisa || isLegacyUsd) && i.tasa ? String(i.tasa) : '',
+      montoUsd: isLegacyUsd ? String(i.monto_usd ?? i.monto) : '',
+      forma_pago: isDivisa ? 'divisa' : (isLegacyUsd ? 'efectivo' : i.forma_pago),
       notas: i.notas ?? '',
     })
     setShowForm(true)
@@ -262,6 +265,18 @@ function IngresosInner() {
       if (!am || am <= 0) { show('Indicá el precio del almuerzo', 'error'); return }
     }
 
+    const isDivisa = cart.forma_pago === 'divisa'
+    const tasaDivisa = isDivisa ? parseDecimalInput(cart.tasa) : 0
+    if (isDivisa && (!tasaDivisa || tasaDivisa <= 0)) {
+      show('Indicá la tasa de cambio (Bs por 1 USD)', 'error'); return
+    }
+
+    // helper: enrich a base record with moneda/tasa/monto_usd when paying with divisa
+    const enrich = (base: { monto: number; [k: string]: unknown }) =>
+      isDivisa
+        ? { ...base, moneda: 'USD', tasa: tasaDivisa, monto_usd: base.monto / tasaDivisa, forma_pago: 'divisa' }
+        : { ...base, moneda: 'BS', forma_pago: cart.forma_pago }
+
     if (editing) {
       // Edit: update only the record being edited
       let tipo = editing.tipo
@@ -279,26 +294,15 @@ function IngresosInner() {
       } else {
         const qty = cart.bebidas[bebida] ?? 0
         const prod = preciosCfg?.productos_catalog.find(p => p.id === bebida)
-        cantidad       = qty || 1
+        cantidad        = qty || 1
         cantidad_bebida = cantidad
-        monto          = cantidad * (prod?.price ?? 0)
+        monto           = cantidad * (prod?.price ?? 0)
       }
 
       const res = await fetch('/api/ingresos', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editing.id,
-          fecha: cart.fecha,
-          tipo,
-          bebida,
-          cantidad,
-          cantidad_bebida,
-          monto,
-          moneda: 'BS',
-          forma_pago: cart.forma_pago,
-          notas: cart.notas,
-        }),
+        body: JSON.stringify(enrich({ id: editing.id, fecha: cart.fecha, tipo, bebida, cantidad, cantidad_bebida, monto, notas: cart.notas })),
       })
       if (!res.ok) { const j = await res.json().catch(() => ({})); show((j as any).error ?? 'Error', 'error'); return }
       show('Ingreso actualizado ✓')
@@ -309,50 +313,20 @@ function IngresosInner() {
     const records: object[] = []
 
     if (cart.empanadas > 0) {
-      records.push({
-        id: generateId(),
-        fecha: cart.fecha,
-        tipo: 'desayuno',
-        bebida: '',
-        cantidad: cart.empanadas,
-        cantidad_bebida: 0,
-        monto: cart.empanadas * (preciosCfg?.empanada_bs ?? 0),
-        moneda: 'BS',
-        forma_pago: cart.forma_pago,
-        notas: cart.notas,
-      })
+      const monto = cart.empanadas * (preciosCfg?.empanada_bs ?? 0)
+      records.push(enrich({ id: generateId(), fecha: cart.fecha, tipo: 'desayuno', bebida: '', cantidad: cart.empanadas, cantidad_bebida: 0, monto, notas: cart.notas }))
     }
 
     if (cart.almuerzo > 0) {
-      records.push({
-        id: generateId(),
-        fecha: cart.fecha,
-        tipo: 'almuerzo',
-        bebida: '',
-        cantidad: cart.almuerzo,
-        cantidad_bebida: 0,
-        monto: parseDecimalInput(cart.almuerzoMonto) || 0,
-        moneda: 'BS',
-        forma_pago: cart.forma_pago,
-        notas: cart.notas,
-      })
+      const monto = parseDecimalInput(cart.almuerzoMonto) || 0
+      records.push(enrich({ id: generateId(), fecha: cart.fecha, tipo: 'almuerzo', bebida: '', cantidad: cart.almuerzo, cantidad_bebida: 0, monto, notas: cart.notas }))
     }
 
     for (const [prodId, qty] of Object.entries(cart.bebidas)) {
       if (qty <= 0) continue
       const prod = preciosCfg?.productos_catalog.find(p => p.id === prodId)
-      records.push({
-        id: generateId(),
-        fecha: cart.fecha,
-        tipo: 'bebida',
-        bebida: prodId,
-        cantidad: qty,
-        cantidad_bebida: qty,
-        monto: qty * (prod?.price ?? 0),
-        moneda: 'BS',
-        forma_pago: cart.forma_pago,
-        notas: cart.notas,
-      })
+      const monto = qty * (prod?.price ?? 0)
+      records.push(enrich({ id: generateId(), fecha: cart.fecha, tipo: 'bebida', bebida: prodId, cantidad: qty, cantidad_bebida: qty, monto, notas: cart.notas }))
     }
 
     const results = await Promise.all(
@@ -415,15 +389,14 @@ function IngresosInner() {
           <EmptyState icon="🍽️" message="Sin ingresos en este período" />
         ) : ingresos.map(i => {
           const { cls, lbl } = chipTipo(i.tipo)
-          const { icon, label } = etiquetaFormaIngreso(i.forma_pago)
+          const { icon, label } = etiquetaFormaIngreso(i.forma_pago, i.moneda ?? 'BS')
           return (
             <div key={i.id} className="card fade-in-up">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className={cls}>{lbl}</span>
-                    <span className="chip-blue">{icon} {label}</span>
-                    {(i.moneda ?? 'BS') === 'USD' && <span className="chip-green">USD</span>}
+                    <span className={(i.moneda ?? 'BS') === 'USD' ? 'chip-green' : 'chip-blue'}>{icon} {label}</span>
                   </div>
                   <p className="text-xl font-bold text-brand-brown">
                     {(i.moneda ?? 'BS') === 'USD'
@@ -579,6 +552,11 @@ function IngresosInner() {
                   <p className={`text-2xl font-black tabular-nums ${autoTotalBs > 0 ? 'text-emerald-700' : 'text-gray-400'}`}>
                     {autoTotalBs > 0 ? formatBs(autoTotalBs) : cart.almuerzo > 0 ? 'Ingresá precio almuerzo ↑' : '—'}
                   </p>
+                  {cart.forma_pago === 'divisa' && autoTotalBs > 0 && parseDecimalInput(cart.tasa) > 0 && (
+                    <p className="text-sm font-bold text-emerald-600 mt-0.5 tabular-nums">
+                      ≈ ${(autoTotalBs / parseDecimalInput(cart.tasa)).toFixed(2)} USD
+                    </p>
+                  )}
                   <p className="text-[11px] text-gray-500 mt-1">
                     {[
                       cart.empanadas > 0 && `${cart.empanadas} empanada${cart.empanadas > 1 ? 's' : ''}`,
@@ -595,13 +573,25 @@ function IngresosInner() {
 
           {/* Payment + notes (common) */}
           {cart.moneda === 'BS' && (
-            <SelectField
-              label="Forma de pago"
-              value={cart.forma_pago}
-              onChange={v => setCart(c => ({ ...c, forma_pago: v }))}
-              options={FORMAS_PAGO_INGRESO_BS}
-              required
-            />
+            <>
+              <SelectField
+                label="Forma de pago"
+                value={cart.forma_pago}
+                onChange={v => setCart(c => ({ ...c, forma_pago: v, tasa: v !== 'divisa' ? '' : c.tasa }))}
+                options={FORMAS_PAGO_INGRESO_BS}
+                required
+              />
+              {cart.forma_pago === 'divisa' && (
+                <InputField
+                  label="Tasa de cambio (Bs por 1 USD)"
+                  value={cart.tasa}
+                  onChange={v => setCart(c => ({ ...c, tasa: v }))}
+                  decimal
+                  placeholder="Ej. 36,50"
+                  required
+                />
+              )}
+            </>
           )}
           <InputField
             label={cart.moneda === 'BS' && cart.forma_pago === 'pago_movil' ? 'Referencia (opcional)' : 'Notas (opcional)'}

@@ -23,11 +23,12 @@ export const BEBIDAS = [
   { value: 'sin_bebida',    label: 'Sin bebida' },
 ]
 
-/** Solo ingresos en bolívares */
+/** Solo ingresos en bolívares (+ divisa USD) */
 export const FORMAS_PAGO_INGRESO_BS = [
   { value: 'efectivo',       label: '💵 Efectivo (Bs)' },
   { value: 'pago_movil',    label: '📱 Pago Móvil' },
   { value: 'transferencia', label: '💳 Punto de Venta' },
+  { value: 'divisa',        label: '🟢 Divisa USD' },
 ]
 
 /** Compat: todos los métodos BS (uso en listados/filtros) */

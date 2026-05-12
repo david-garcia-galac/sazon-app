@@ -59,7 +59,7 @@ export interface Ingreso {
   moneda: 'BS' | 'USD'
   tasa?: number | null
   monto_usd?: number | null
-  forma_pago: 'efectivo' | 'pago_movil' | 'transferencia'
+  forma_pago: 'efectivo' | 'pago_movil' | 'transferencia' | 'divisa'
   notas?: string
   created_at: string
   updated_at: string
