@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Coffee, Timer, UtensilsCrossed } from 'lucide-react'
+import { Coffee, Handshake, Timer, UtensilsCrossed } from 'lucide-react'
 import { LoadingSpinner, Toast, useToast } from '@/components/ui'
 import InternalUseBanner, { DISCLAIMER_INTERNO } from '@/components/InternalUseBanner'
 import { hoy } from '@/lib/constants'
@@ -96,6 +96,31 @@ export default function OwnerPage() {
         ) : (
           <>
             <KpiGrid kpis={data.kpis} />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="card p-3.5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Handshake size={14} className="text-orange-500" />
+                  <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wide">
+                    Deudores activos
+                  </p>
+                </div>
+                <p className="text-2xl font-extrabold text-gray-900">{data.deudores.count}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">clientes con saldo pendiente</p>
+              </div>
+              <div className="card p-3.5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Handshake size={14} className="text-orange-500" />
+                  <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wide">
+                    Total adeudado
+                  </p>
+                </div>
+                <p className="text-2xl font-extrabold text-gray-900">
+                  ${data.deudores.totalUsd.toFixed(2)}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-0.5">USD sin mora</p>
+              </div>
+            </div>
 
             <SalesTrendChart trend={data.salesTrend30} compare={data.weekCompare} />
 

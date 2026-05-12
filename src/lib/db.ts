@@ -192,6 +192,43 @@ export async function ensureSchemaPatches() {
   try {
     await sql`ALTER TABLE precios_config ADD COLUMN IF NOT EXISTS productos_catalog TEXT NOT NULL DEFAULT '[]'`
   } catch { /* columna ya existe */ }
+  // Módulo deudores
+  await sql`
+    CREATE TABLE IF NOT EXISTS clientes_deudores (
+      id           TEXT PRIMARY KEY,
+      nombre       TEXT NOT NULL,
+      telefono     TEXT,
+      limite_usd   NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+      activo       BOOLEAN DEFAULT TRUE,
+      notas        TEXT,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS consumos_deudores (
+      id           TEXT PRIMARY KEY,
+      cliente_id   TEXT NOT NULL REFERENCES clientes_deudores(id),
+      descripcion  TEXT NOT NULL,
+      monto_usd    NUMERIC(10,2) NOT NULL,
+      tasa_ref     NUMERIC(10,2),
+      fecha        DATE NOT NULL,
+      created_at   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS pagos_deudores (
+      id           TEXT PRIMARY KEY,
+      cliente_id   TEXT NOT NULL REFERENCES clientes_deudores(id),
+      monto_usd    NUMERIC(10,2) NOT NULL,
+      forma_pago   TEXT NOT NULL,
+      fecha        DATE NOT NULL,
+      notas        TEXT,
+      created_at   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_consumos_deudores_cliente ON consumos_deudores(cliente_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_pagos_deudores_cliente    ON pagos_deudores(cliente_id)`
   try {
     await sql`ALTER TABLE ingresos ADD COLUMN IF NOT EXISTS cantidad_bebida INTEGER NOT NULL DEFAULT 0`
   } catch {

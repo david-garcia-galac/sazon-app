@@ -116,6 +116,10 @@ export interface OwnerMetrics {
     desayuno: { ordenes: number; ingresoBs: number; ticketPromedio: number }
     almuerzo: { ordenes: number; ingresoBs: number; ticketPromedio: number }
   }
+  deudores: {
+    count: number
+    totalUsd: number
+  }
 }
 
 export const TURNO_LABELS: Record<Turno, string> = {

@@ -6,7 +6,7 @@ const SECRET = new TextEncoder().encode(
 )
 const COOKIE = 'sazon_session'
 
-export type UserRole = 'admin' | 'owner'
+export type UserRole = 'admin' | 'owner' | 'cajero'
 
 export interface SessionPayload {
   role: UserRole
@@ -14,54 +14,41 @@ export interface SessionPayload {
   exp?: number
 }
 
-/** Landing recomendada para cada rol (también la usa el redirect del login). */
+/** Landing recomendada para cada rol. */
 export const ROLE_HOME: Record<UserRole, string> = {
-  admin: '/dashboard',
-  owner: '/owner',
+  admin:  '/dashboard',
+  owner:  '/owner',
+  cajero: '/deudores',
 }
 
-/**
- * Whitelist de rutas por rol.
- *
- * - `owner` accede solo a su panel ejecutivo + a Reportes (porque el spec
- *   permite que envíe PDFs ejecutivos por WhatsApp/internet).
- * - `admin` accede a todo excepto a `/owner`.
- *
- * El middleware aplica esta lista sobre rutas de UI (no APIs). Las APIs se
- * filtran aparte porque algunas son lectura compartida y otras escritura.
- */
-const OWNER_UI_PREFIXES = ['/owner', '/reportes']
+const OWNER_UI_PREFIXES   = ['/owner', '/reportes']
+const CAJERO_UI_PREFIXES  = ['/deudores']
 const ADMIN_FORBIDDEN_PREFIXES = ['/owner']
 
-/** APIs que SOLO el owner puede llamar. Las demás siguen abiertas a admin. */
 const OWNER_ONLY_API_PREFIXES = ['/api/owner']
-
-/** APIs prohibidas para owner (todo lo "fino" del admin). */
+const CAJERO_ALLOWED_API_PREFIXES = ['/api/deudores', '/api/auth', '/api/precios']
 const ADMIN_ONLY_API_PREFIXES = [
-  '/api/ingresos',
-  '/api/egresos',
-  '/api/inventario',
-  '/api/proveedores',
-  '/api/precios',
-  '/api/dashboard',
-  '/api/db-init',
-  '/api/sync',
+  '/api/ingresos', '/api/egresos', '/api/inventario',
+  '/api/proveedores', '/api/precios', '/api/dashboard',
+  '/api/db-init', '/api/sync',
 ]
 
 export function canAccessPath(role: UserRole, pathname: string): boolean {
   if (pathname.startsWith('/api/')) {
+    if (role === 'cajero')
+      return CAJERO_ALLOWED_API_PREFIXES.some((p) => pathname.startsWith(p))
     if (OWNER_ONLY_API_PREFIXES.some((p) => pathname.startsWith(p))) return role === 'owner'
     if (role === 'owner' && ADMIN_ONLY_API_PREFIXES.some((p) => pathname.startsWith(p))) {
-      // El owner puede consumir los reportes para generar PDFs (que son agregados).
       if (pathname.startsWith('/api/reportes')) return true
       return false
     }
     return true
   }
 
-  if (role === 'owner') {
+  if (role === 'cajero')
+    return CAJERO_UI_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  if (role === 'owner')
     return OWNER_UI_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
-  }
 
   // admin
   return !ADMIN_FORBIDDEN_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
@@ -92,8 +79,9 @@ export async function getSession(): Promise<SessionPayload | null> {
 }
 
 export function checkPin(pin: string): UserRole | null {
-  if (pin === process.env.ADMIN_PIN) return 'admin'
-  if (pin === process.env.OWNER_PIN) return 'owner'
+  if (pin === process.env.ADMIN_PIN)  return 'admin'
+  if (pin === process.env.OWNER_PIN)  return 'owner'
+  if (pin === process.env.CAJERO_PIN) return 'cajero'
   return null
 }
 

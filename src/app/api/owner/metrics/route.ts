@@ -456,6 +456,20 @@ export async function GET(req: NextRequest) {
       ingresosRealesPorFecha: realPorFecha,
     })
 
+    type DeudoresRow = { count: string; total_usd: string }
+    const deudoresRows = (await sql`
+      SELECT COUNT(*) AS count, COALESCE(SUM(saldo), 0) AS total_usd
+      FROM (
+        SELECT COALESCE(cons.total, 0) - COALESCE(pag.total, 0) AS saldo
+        FROM clientes_deudores c
+        LEFT JOIN (SELECT cliente_id, SUM(monto_usd) AS total FROM consumos_deudores GROUP BY cliente_id) cons ON cons.cliente_id = c.id
+        LEFT JOIN (SELECT cliente_id, SUM(monto_usd) AS total FROM pagos_deudores GROUP BY cliente_id) pag ON pag.cliente_id = c.id
+        WHERE c.activo = TRUE
+      ) sub
+      WHERE saldo > 0.001
+    `) as unknown as DeudoresRow[]
+    const deudoresRow = deudoresRows[0] ?? { count: '0', total_usd: '0' }
+
     const metrics: OwnerMetrics = {
       range,
       generadoEn: new Date().toISOString(),
@@ -485,6 +499,10 @@ export async function GET(req: NextRequest) {
             ? stats.almuerzo.bs / stats.almuerzo.o
             : 0,
         },
+      },
+      deudores: {
+        count: Number(deudoresRow.count),
+        totalUsd: Math.round(Number(deudoresRow.total_usd) * 100) / 100,
       },
     }
 
