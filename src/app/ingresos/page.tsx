@@ -9,7 +9,6 @@ import {
   EmptyState, LoadingSpinner, SelectField, InputField
 } from '@/components/ui'
 import {
-  BEBIDAS,
   FORMAS_PAGO_INGRESO_BS,
   MONEDAS,
   formatBs,
@@ -29,10 +28,44 @@ type PreciosCfg = {
   precios_bebidas: Record<string, number>
 }
 
-const TIPOS = [
-  { value: 'desayuno', label: '🥟 Empanadas' },
-  { value: 'almuerzo', label: '☀️ Almuerzo' },
+const BEBIDAS_MENU = [
+  { value: 'coca_cola',    emoji: '🥤', name: 'Coca-Cola',    desc: 'Refrescante y fría' },
+  { value: 'jugo_natural', emoji: '🧃', name: 'Jugo Natural', desc: 'Hecha en casa' },
+  { value: 'malta',        emoji: '🍺', name: 'Malta',        desc: 'Malta bien fría' },
+  { value: 'agua',         emoji: '💧', name: 'Agua',         desc: 'Agua fría' },
 ]
+
+function ProductCard({ emoji, name, desc, price, quantity, onAdd, onRemove }: {
+  emoji: string; name: string; desc: string; price: string
+  quantity: number; onAdd: () => void; onRemove: () => void
+}) {
+  return (
+    <div className={`rounded-2xl border-2 p-3 transition-colors ${quantity > 0 ? 'border-orange-400 bg-orange-50' : 'border-gray-100 bg-white shadow-sm'}`}>
+      <div className="text-3xl mb-2">{emoji}</div>
+      <p className="font-bold text-sm text-gray-800 leading-tight">{name}</p>
+      <p className="text-xs text-gray-400 mt-0.5 mb-1.5 leading-snug">{desc}</p>
+      <p className="text-xs font-bold text-brand-orange mb-3">{price}</p>
+      {quantity === 0 ? (
+        <button type="button" onClick={onAdd}
+          className="w-full py-2 rounded-xl bg-orange-500 text-white text-sm font-bold active:scale-95 transition-transform">
+          Agregar
+        </button>
+      ) : (
+        <div className="flex items-center justify-between bg-white rounded-xl px-1 py-1">
+          <button type="button" onClick={onRemove}
+            className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 font-bold text-xl flex items-center justify-center active:scale-90 transition-transform">
+            −
+          </button>
+          <span className="font-bold text-gray-700 text-base tabular-nums">{quantity}</span>
+          <button type="button" onClick={onAdd}
+            className="w-8 h-8 rounded-lg bg-orange-500 text-white font-bold text-xl flex items-center justify-center active:scale-90 transition-transform">
+            +
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function etiquetaFormaIngreso(fp: string): { icon: string; label: string } {
   switch (fp) {
@@ -363,21 +396,8 @@ function IngresosInner() {
 
       {/* Form Modal */}
       <Modal open={showForm} onClose={closeForm} title={editing ? 'Editar ingreso' : 'Nuevo ingreso'}>
-        <form onSubmit={submit} className="space-y-4 mt-2">
+        <form onSubmit={submit} className="space-y-5 mt-2">
           <InputField label="Fecha" value={form.fecha} onChange={v=>setForm(f=>({...f,fecha:v}))} type="date" required/>
-          <SelectField
-            label="Tipo"
-            value={form.tipo}
-            onChange={(v) =>
-              setForm((f) => ({
-                ...f,
-                tipo: v,
-                monto: v === 'almuerzo' ? '' : f.monto,
-              }))
-            }
-            options={TIPOS}
-            required
-          />
           <SelectField
             label="Moneda del ingreso"
             value={form.moneda}
@@ -392,42 +412,92 @@ function IngresosInner() {
             options={MONEDAS}
             required
           />
-          <SelectField
-            label="Bebida"
-            value={form.bebida}
-            onChange={(v) =>
-              setForm((f) => ({
-                ...f,
-                bebida: v,
-                cantidad_bebida:
-                  v === 'sin_bebida' || !v
-                    ? '0'
-                    : f.cantidad_bebida === '0' ||
-                        !f.cantidad_bebida ||
-                        Number(f.cantidad_bebida) < 1
-                      ? '1'
-                      : f.cantidad_bebida,
-              }))
-            }
-            options={BEBIDAS}/>
-          {!form.bebida || form.bebida === 'sin_bebida' ? null : (
-            <InputField
-              label="Cantidad de bebidas"
-              value={form.cantidad_bebida}
-              onChange={(v) => setForm((f) => ({ ...f, cantidad_bebida: v }))}
-              type="number"
-              min="1"
-              required
-            />
-          )}
-          <InputField
-            label={form.tipo === 'desayuno' ? 'Cantidad de empanadas' : 'Cantidad'}
-            value={form.cantidad}
-            onChange={(v) => setForm((f) => ({ ...f, cantidad: v }))}
-            type="number"
-            min="1"
-            required
-          />
+
+          {/* Productos */}
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Producto</p>
+            <div className="grid grid-cols-2 gap-3">
+              <ProductCard
+                emoji="🥟"
+                name="Empanadas"
+                desc="De queso, carne o pollo"
+                price={preciosCfg ? `${formatBs(preciosCfg.empanada_bs)} c/u` : '—'}
+                quantity={form.tipo === 'desayuno' ? parseInt(form.cantidad) || 0 : 0}
+                onAdd={() =>
+                  setForm((f) => ({
+                    ...f,
+                    tipo: 'desayuno',
+                    cantidad: String((f.tipo === 'desayuno' ? parseInt(f.cantidad) || 0 : 0) + 1),
+                    monto: f.tipo !== 'desayuno' ? '' : f.monto,
+                  }))
+                }
+                onRemove={() => {
+                  if (form.tipo !== 'desayuno') return
+                  setForm((f) => ({ ...f, cantidad: String(Math.max(1, (parseInt(f.cantidad) || 1) - 1)) }))
+                }}
+              />
+              <ProductCard
+                emoji="☀️"
+                name="Almuerzo"
+                desc="Plato del día"
+                price="Precio libre"
+                quantity={form.tipo === 'almuerzo' ? parseInt(form.cantidad) || 0 : 0}
+                onAdd={() =>
+                  setForm((f) => ({
+                    ...f,
+                    tipo: 'almuerzo',
+                    cantidad: String((f.tipo === 'almuerzo' ? parseInt(f.cantidad) || 0 : 0) + 1),
+                    monto: f.tipo !== 'almuerzo' ? '' : f.monto,
+                  }))
+                }
+                onRemove={() => {
+                  if (form.tipo !== 'almuerzo') return
+                  setForm((f) => ({ ...f, cantidad: String(Math.max(1, (parseInt(f.cantidad) || 1) - 1)) }))
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Bebidas */}
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+              Bebidas <span className="normal-case font-normal">(opcional)</span>
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {BEBIDAS_MENU.map((beb) => {
+                const qty = form.bebida === beb.value ? parseInt(form.cantidad_bebida) || 0 : 0
+                const unitPrice = preciosCfg?.precios_bebidas[beb.value]
+                return (
+                  <ProductCard
+                    key={beb.value}
+                    emoji={beb.emoji}
+                    name={beb.name}
+                    desc={beb.desc}
+                    price={unitPrice != null ? `${formatBs(unitPrice)} c/u` : '—'}
+                    quantity={qty}
+                    onAdd={() =>
+                      setForm((f) => ({
+                        ...f,
+                        bebida: beb.value,
+                        cantidad_bebida: String((f.bebida === beb.value ? parseInt(f.cantidad_bebida) || 0 : 0) + 1),
+                      }))
+                    }
+                    onRemove={() => {
+                      if (form.bebida !== beb.value) return
+                      const next = Math.max(0, (parseInt(form.cantidad_bebida) || 0) - 1)
+                      setForm((f) => ({
+                        ...f,
+                        bebida: next === 0 ? 'sin_bebida' : beb.value,
+                        cantidad_bebida: String(next),
+                      }))
+                    }}
+                  />
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Montos */}
           {form.moneda === 'USD' ? (
             <>
               <InputField
