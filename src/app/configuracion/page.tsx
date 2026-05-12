@@ -13,6 +13,20 @@ type PreciosPayload = {
   precios_bebidas: Record<string, number>
 }
 
+function PriceCard({ emoji, name, desc, value, onChange, fullWidth = false }: {
+  emoji: string; name: string; desc: string; value: string
+  onChange: (v: string) => void; fullWidth?: boolean
+}) {
+  return (
+    <div className={`rounded-2xl border-2 border-gray-100 bg-white shadow-sm p-3 ${fullWidth ? 'col-span-2' : ''}`}>
+      <div className="text-3xl mb-2">{emoji}</div>
+      <p className="font-bold text-sm text-gray-800 leading-tight">{name}</p>
+      <p className="text-xs text-gray-400 mt-0.5 mb-3 leading-snug">{desc}</p>
+      <InputField label="Precio (Bs)" value={value} onChange={onChange} decimal placeholder="0,00" />
+    </div>
+  )
+}
+
 export default function ConfiguracionPage() {
   const router = useRouter()
   const { toast, show } = useToast()
@@ -123,48 +137,45 @@ export default function ConfiguracionPage() {
         onBack
       />
 
-      <div className="px-4 pt-4 space-y-5">
+      <div className="px-4 pt-4 space-y-6">
         {loading ? (
           <LoadingSpinner/>
         ) : (
           <>
-            <div className="card p-4 space-y-4">
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Producto principal</p>
+              <div className="grid grid-cols-2 gap-3">
+                <PriceCard
+                  emoji="🥟"
+                  name="Empanada"
+                  desc="Precio por unidad"
+                  value={empanada}
+                  onChange={setEmpanada}
+                  fullWidth
+                />
+              </div>
+            </div>
+
+            <div className="card p-4 space-y-3">
               <InputField
-                label="Precio por empanada (Bs)"
-                value={empanada}
-                onChange={setEmpanada}
-                decimal
-                placeholder="0,00"
-                required
-              />
-              <InputField
-                label="Tasa referencial BCV (Bs por 1 USD) — sólo ayuda memo"
+                label="Tasa referencial BCV (Bs por 1 USD) — solo memo"
                 value={tasaBcv}
                 onChange={setTasaBcv}
                 decimal
                 placeholder="Ej. 36,50 (opcional)"
               />
               <p className="text-xs text-gray-500">
-                El campo BCV sirve solo como referencia en este panel para recordar la tasa con la que
-                afinaste esta semana; el total del ingreso se arma con los precios fijos que cargues
-                aquí arriba.
+                Sirve solo como referencia visual; el total del ingreso se calcula con los precios fijos de arriba.
               </p>
             </div>
 
             <div>
-              <h2 className="section-title mb-3">Precio de bebida (Bs cada una)</h2>
-              <div className="space-y-3">
-                {BEBIDAS.map((b) => (
-                  <div key={b.value} className="card p-4">
-                    <InputField
-                      label={b.label}
-                      value={bebidas[b.value] ?? '0'}
-                      onChange={(v) => setBebidas((prev) => ({ ...prev, [b.value]: v }))}
-                      decimal
-                      placeholder="0,00"
-                    />
-                  </div>
-                ))}
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Bebidas</p>
+              <div className="grid grid-cols-2 gap-3">
+                <PriceCard emoji="🥤" name="Coca-Cola"    desc="Por unidad" value={bebidas['coca_cola']    ?? '0'} onChange={(v) => setBebidas((p) => ({ ...p, coca_cola:    v }))} />
+                <PriceCard emoji="🧃" name="Jugo Natural" desc="Por unidad" value={bebidas['jugo_natural'] ?? '0'} onChange={(v) => setBebidas((p) => ({ ...p, jugo_natural: v }))} />
+                <PriceCard emoji="🍺" name="Malta"        desc="Por unidad" value={bebidas['malta']        ?? '0'} onChange={(v) => setBebidas((p) => ({ ...p, malta:        v }))} />
+                <PriceCard emoji="💧" name="Agua"         desc="Por unidad" value={bebidas['agua']         ?? '0'} onChange={(v) => setBebidas((p) => ({ ...p, agua:         v }))} />
               </div>
             </div>
 
