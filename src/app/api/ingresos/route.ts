@@ -88,7 +88,20 @@ function normalizeIngreso(
   let monto_usd: number | null = null
   let forma: string
 
-  if (moneda === 'USD') {
+  const formaPagoStr = typeof forma_pago === 'string' ? forma_pago : ''
+
+  if (formaPagoStr === 'divisa') {
+    // New divisa flow: net USD, no tasa required
+    const usd = montoUsdIn != null && Number.isFinite(Number(montoUsdIn))
+      ? Number(montoUsdIn)
+      : Number(montoIn)
+    if (!Number.isFinite(usd) || usd <= 0)
+      return badRequest('Indica el monto en USD')
+    monto = usd
+    monto_usd = usd
+    tasa = null
+    forma = 'divisa'
+  } else if (moneda === 'USD') {
     const usd = Number(montoIn)
     const rate = Number(tasaIn)
     if (!Number.isFinite(usd) || usd <= 0)
@@ -107,7 +120,7 @@ function normalizeIngreso(
     if (!Number.isFinite(monto) || monto <= 0)
       return badRequest('Indica el monto en Bs')
     const allowed = ['efectivo', 'pago_movil', 'transferencia']
-    forma = typeof forma_pago === 'string' ? forma_pago : ''
+    forma = formaPagoStr
     if (!allowed.includes(forma))
       return badRequest('Forma de pago no válida')
   }
@@ -251,16 +264,23 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { id } = await req.json()
+  const body = await req.json()
   try {
     await ensureSchemaPatches()
-    await sql`
-      DELETE FROM ingresos WHERE id = ${id}
-    `
+    // Bulk delete: { ids: string[] }
+    if (Array.isArray(body.ids)) {
+      const ids = body.ids.filter((x: unknown) => typeof x === 'string')
+      if (ids.length === 0) return jsonNoStore({ ok: true })
+      await sql`DELETE FROM ingresos WHERE id = ANY(${ids})`
+      logDbOk('ingresos', 'delete.bulk', { count: ids.length })
+      return jsonNoStore({ ok: true })
+    }
+    const { id } = body
+    await sql`DELETE FROM ingresos WHERE id = ${id}`
     logDbOk('ingresos', 'delete', { id })
     return jsonNoStore({ ok: true })
   } catch (e: any) {
-    logDbFail('ingresos', 'delete', e, { id })
+    logDbFail('ingresos', 'delete', e, { body })
     return jsonNoStore({ error: e.message }, { status: 500 })
   }
 }

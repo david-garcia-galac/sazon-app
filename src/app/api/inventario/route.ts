@@ -6,14 +6,15 @@ export const dynamic = 'force-dynamic'
 async function ensureTables() {
   await sql`
     CREATE TABLE IF NOT EXISTS inventario (
-      id           TEXT PRIMARY KEY,
-      nombre       TEXT NOT NULL,
-      categoria    TEXT NOT NULL,
-      unidad       TEXT NOT NULL DEFAULT 'unidad',
-      stock_actual NUMERIC(10,2) DEFAULT 0,
-      stock_minimo NUMERIC(10,2) DEFAULT 0,
-      notas        TEXT,
-      updated_at   TIMESTAMPTZ DEFAULT NOW()
+      id                TEXT PRIMARY KEY,
+      nombre            TEXT NOT NULL,
+      categoria         TEXT NOT NULL,
+      unidad            TEXT NOT NULL DEFAULT 'unidad',
+      stock_actual      NUMERIC(10,2) DEFAULT 0,
+      stock_minimo      NUMERIC(10,2) DEFAULT 0,
+      notas             TEXT,
+      fecha_vencimiento DATE,
+      updated_at        TIMESTAMPTZ DEFAULT NOW()
     )
   `
   await sql`
@@ -27,6 +28,10 @@ async function ensureTables() {
       created_at    TIMESTAMPTZ DEFAULT NOW()
     )
   `
+  // Migration: add fecha_vencimiento if not present
+  try {
+    await sql`ALTER TABLE inventario ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE`
+  } catch { /* already exists */ }
 }
 
 export async function GET() {
@@ -47,10 +52,11 @@ export async function POST(req: NextRequest) {
     const { _type, ...data } = body
 
     if (_type === 'item') {
-      const { id, nombre, categoria, unidad, stock_actual, stock_minimo, notas } = data
+      const { id, nombre, categoria, unidad, stock_actual, stock_minimo, notas, fecha_vencimiento } = data
+      const fv = fecha_vencimiento && fecha_vencimiento.length >= 10 ? fecha_vencimiento : null
       await sql`
-        INSERT INTO inventario (id, nombre, categoria, unidad, stock_actual, stock_minimo, notas)
-        VALUES (${id}, ${nombre}, ${categoria}, ${unidad ?? 'unidad'}, ${stock_actual ?? 0}, ${stock_minimo ?? 0}, ${notas ?? null})
+        INSERT INTO inventario (id, nombre, categoria, unidad, stock_actual, stock_minimo, notas, fecha_vencimiento)
+        VALUES (${id}, ${nombre}, ${categoria}, ${unidad ?? 'unidad'}, ${stock_actual ?? 0}, ${stock_minimo ?? 0}, ${notas ?? null}, ${fv})
       `
       return NextResponse.json({ ok: true })
     }

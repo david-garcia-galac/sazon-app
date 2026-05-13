@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, Image as ImageIcon } from 'lucide-react'
+import { Plus, Pencil, Trash2, Image as ImageIcon, CheckSquare, Square, XCircle } from 'lucide-react'
 import BottomNav from '@/components/BottomNav'
 import PageHeader from '@/components/PageHeader'
 import {
@@ -25,6 +25,10 @@ function EgresosInner() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [addingProv, setAddingProv]   = useState(false)
   const [newProvNombre, setNewProvNombre] = useState('')
+  // Bulk delete
+  const [selMode, setSelMode]       = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [confirmBulk, setConfirmBulk] = useState(false)
   const { toast, show } = useToast()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -235,6 +239,31 @@ function EgresosInner() {
     load()
   }
 
+  const toggleSel = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const selectAll = () => setSelectedIds(new Set(egresos.map(e => e.id)))
+  const clearSel  = () => { setSelectedIds(new Set()); setSelMode(false) }
+
+  const delBulk = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    await fetch('/api/egresos', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    })
+    show(`${ids.length} egreso${ids.length > 1 ? 's' : ''} eliminado${ids.length > 1 ? 's' : ''}`, 'error')
+    setConfirmBulk(false)
+    clearSel()
+    load()
+  }
+
   const del = async (id: string) => {
     try {
       const res = await fetch('/api/egresos', {
@@ -271,6 +300,12 @@ function EgresosInner() {
     <div className="pb-20">
       {toast && <Toast message={toast.message} type={toast.type}/>}
       <ConfirmDialog open={!!confirmId} message="¿Eliminar este egreso?" onConfirm={() => del(confirmId!)} onCancel={() => setConfirmId(null)}/>
+      <ConfirmDialog
+        open={confirmBulk}
+        message={`¿Eliminar ${selectedIds.size} egreso${selectedIds.size > 1 ? 's' : ''} seleccionado${selectedIds.size > 1 ? 's' : ''}?`}
+        onConfirm={delBulk}
+        onCancel={() => setConfirmBulk(false)}
+      />
 
       <PageHeader
         title="Egresos"
@@ -278,10 +313,18 @@ function EgresosInner() {
         colorClass="header-red"
         showLogout
         right={
-          <button onClick={() => setShowForm(true)}
-            className="w-10 h-10 rounded-2xl bg-black/15 text-white flex items-center justify-center active:scale-90 transition-transform">
-            <Plus size={20}/>
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setSelMode(s => !s); setSelectedIds(new Set()) }}
+              className={`w-10 h-10 rounded-2xl text-white flex items-center justify-center active:scale-90 transition-transform ${selMode ? 'bg-white/30' : 'bg-black/15'}`}
+            >
+              <CheckSquare size={18}/>
+            </button>
+            <button onClick={() => setShowForm(true)}
+              className="w-10 h-10 rounded-2xl bg-black/15 text-white flex items-center justify-center active:scale-90 transition-transform">
+              <Plus size={20}/>
+            </button>
+          </div>
         }
       />
 
@@ -297,12 +340,45 @@ function EgresosInner() {
         ))}
       </div>
 
+      {/* Selection bar */}
+      {selMode && egresos.length > 0 && (
+        <div className="mx-4 mb-2 flex items-center gap-2 bg-red-50 border border-red-200 rounded-2xl px-3 py-2">
+          <button onClick={selectAll} className="text-xs font-bold text-red-600 active:scale-95">
+            Selec. todos ({egresos.length})
+          </button>
+          <span className="flex-1 text-xs text-gray-500 text-center">
+            {selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}
+          </span>
+          {selectedIds.size > 0 && (
+            <button onClick={() => setConfirmBulk(true)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-500 text-white text-xs font-bold active:scale-95">
+              <Trash2 size={12}/> Eliminar
+            </button>
+          )}
+          <button onClick={clearSel} className="text-gray-400 active:scale-95">
+            <XCircle size={16}/>
+          </button>
+        </div>
+      )}
+
       <div className="px-4 pt-2 space-y-3">
         {loading ? <LoadingSpinner/> : egresos.length === 0 ? (
           <EmptyState icon="📤" message="Sin egresos en este período"/>
-        ) : egresos.map(e => (
-          <div key={e.id} className="card fade-in-up">
+        ) : egresos.map(e => {
+          const isSel = selectedIds.has(e.id)
+          return (
+          <div key={e.id}
+            className={`card fade-in-up transition-colors ${isSel ? 'border-2 border-red-400 bg-red-50' : ''}`}
+            onClick={selMode ? () => toggleSel(e.id) : undefined}
+          >
             <div className="flex items-start gap-3">
+              {selMode && (
+                <div className="pt-0.5">
+                  {isSel
+                    ? <CheckSquare size={20} className="text-red-500"/>
+                    : <Square size={20} className="text-gray-300"/>}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                   <span className="chip-red">{labelCategoria(e.categoria)}</span>
@@ -324,25 +400,27 @@ function EgresosInner() {
                   </span>
                 </div>
               </div>
-              <div className="flex gap-1.5 items-center shrink-0">
-                {e.foto_url && (
-                  <a href={e.foto_url} target="_blank" rel="noreferrer"
-                    className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center active:scale-90 transition-transform">
-                    <ImageIcon size={14} className="text-blue-500"/>
-                  </a>
-                )}
-                <button onClick={() => openEdit(e)}
-                  className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center active:scale-90 transition-transform">
-                  <Pencil size={14} className="text-orange-500"/>
-                </button>
-                <button onClick={() => setConfirmId(e.id)}
-                  className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center active:scale-90 transition-transform">
-                  <Trash2 size={14} className="text-red-500"/>
-                </button>
-              </div>
+              {!selMode && (
+                <div className="flex gap-1.5 items-center shrink-0">
+                  {e.foto_url && (
+                    <a href={e.foto_url} target="_blank" rel="noreferrer"
+                      className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center active:scale-90 transition-transform">
+                      <ImageIcon size={14} className="text-blue-500"/>
+                    </a>
+                  )}
+                  <button onClick={() => openEdit(e)}
+                    className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center active:scale-90 transition-transform">
+                    <Pencil size={14} className="text-orange-500"/>
+                  </button>
+                  <button onClick={() => setConfirmId(e.id)}
+                    className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center active:scale-90 transition-transform">
+                    <Trash2 size={14} className="text-red-500"/>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-        ))}
+        )})}
       </div>
 
       <Modal open={showForm} onClose={closeForm} title={editing ? 'Editar egreso' : 'Nuevo egreso'}>

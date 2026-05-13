@@ -242,20 +242,26 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { id } = await req.json()
-  if (!id) {
-    logDbFail('egresos', 'delete', new Error('ID requerido'), { id })
-    return jsonNoStore({ error: 'ID requerido' }, { status: 400 })
-  }
+  const body = await req.json()
   try {
     await ensureEgresosTable()
-    await sql`
-      DELETE FROM egresos WHERE id = ${id}
-    `
+    if (Array.isArray(body.ids)) {
+      const ids = body.ids.filter((x: unknown) => typeof x === 'string')
+      if (ids.length === 0) return jsonNoStore({ ok: true })
+      await sql`DELETE FROM egresos WHERE id = ANY(${ids})`
+      logDbOk('egresos', 'delete.bulk', { count: ids.length })
+      return jsonNoStore({ ok: true })
+    }
+    const { id } = body
+    if (!id) {
+      logDbFail('egresos', 'delete', new Error('ID requerido'), { id })
+      return jsonNoStore({ error: 'ID requerido' }, { status: 400 })
+    }
+    await sql`DELETE FROM egresos WHERE id = ${id}`
     logDbOk('egresos', 'delete', { id })
     return jsonNoStore({ ok: true })
   } catch (e: any) {
-    logDbFail('egresos', 'delete', e, { id })
+    logDbFail('egresos', 'delete', e, { body })
     return jsonNoStore({ error: e.message }, { status: 500 })
   }
 }

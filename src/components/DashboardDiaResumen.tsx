@@ -144,10 +144,11 @@ export function DashboardDiaResumen({
   const cap    = hoyFn()
   const esHoy  = fechaValue === cap
   const d      = detalle
-  const pos    = agg.saldo >= 0
+  const pos    = (d.bs.total - agg.egresos) >= 0
 
-  const totalEquiv = d.bs.total + d.usd.equivBs   // all ingresos expressed in Bs
+  const totalEquiv  = d.bs.total   // pure Bs income (USD shown separately)
   const totalVentas = d.bs.ventas + d.usd.ventas
+  const bsSaldo     = d.bs.total - agg.egresos
 
   const segments: DonutSegment[] = [
     {
@@ -172,15 +173,15 @@ export function DashboardDiaResumen({
       display: formatBs(d.bs.transferencia),
     },
     {
-      value: d.usd.equivBs,
+      value: d.usd.totalUsd,
       color: '#10B981',
       gradId: 'grad-usd',
       label: 'Divisas USD',
-      display: `${formatUSD(d.usd.totalUsd)} ≈ ${formatBs(d.usd.equivBs)}`,
+      display: formatUSD(d.usd.totalUsd),
     },
   ]
 
-  const hayDatos = totalEquiv > 0
+  const hayDatos = totalEquiv > 0 || d.usd.totalUsd > 0
 
   return (
     <section className="space-y-3">
@@ -215,14 +216,14 @@ export function DashboardDiaResumen({
         </p>
         <p className="text-white font-black leading-none tabular-nums"
            style={{ fontSize: 'clamp(1.9rem, 8vw, 2.6rem)' }}>
-          {formatBs(agg.saldo)}
+          {formatBs(bsSaldo)}
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="bg-white/15 rounded-xl px-3 py-2">
-            <p className="text-white/60 text-[9px] uppercase tracking-wide font-semibold">Ingresos</p>
-            <p className="text-white font-bold text-sm tabular-nums">{shortBs(totalEquiv)}</p>
+            <p className="text-white/60 text-[9px] uppercase tracking-wide font-semibold">Ingresos Bs</p>
+            <p className="text-white font-bold text-sm tabular-nums">{shortBs(d.bs.total)}</p>
             {d.usd.totalUsd > 0 && (
-              <p className="text-white/60 text-[9px] tabular-nums">{formatUSD(d.usd.totalUsd)} USD</p>
+              <p className="text-white/70 text-[9px] tabular-nums font-semibold">+ {formatUSD(d.usd.totalUsd)} USD</p>
             )}
           </div>
           <div className="bg-white/15 rounded-xl px-3 py-2">
@@ -241,7 +242,7 @@ export function DashboardDiaResumen({
       )}
 
       {/* ── Donut: todos los ingresos del día ── */}
-      {totalEquiv > 0 && (
+      {hayDatos && (
         <div className="card p-4">
           <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wide mb-3">
             Ingresos del día · {totalVentas} venta{totalVentas !== 1 ? 's' : ''}
@@ -249,7 +250,7 @@ export function DashboardDiaResumen({
           <div className="flex items-center gap-4">
             <DonutChart
               segments={segments}
-              center={shortBs(totalEquiv).replace(' Bs', '')}
+              center={shortBs(d.bs.total).replace(' Bs', '')}
             />
             <div className="flex-1 space-y-2.5 min-w-0">
               {segments.filter(s => s.value > 0).map(seg => (
